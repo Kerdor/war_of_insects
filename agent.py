@@ -7,14 +7,14 @@ from reward import RewardEngine
 
 
 class Agent:
-    def __init__(self):
+    def __init__(self, learning=None, memory=None):
         self.perception = Perception()
-        self.learning = QLearning()
-        self.memory = ExperienceMemory()
+        self.learning = learning or QLearning()
+        self.memory = memory or ExperienceMemory()
         self.reward = RewardEngine()
         self.epsilon = 0.20
 
-    async def step(self, client, message):
+    async def step(self, client, message, account_id):
         buttons = self._flatten_buttons(message)
         state = self.perception.parse(message.text or "", buttons)
         state_key = self.perception.state_key(state)
@@ -38,7 +38,7 @@ class Agent:
         next_actions = [action.key or action.text for action in next_state.available_actions]
         reward = self.reward.calculate(state, next_state)
 
-        self.memory.add(state_key, selected_key, next_key, reward)
+        self.memory.add(account_id, state_key, selected_key, next_key, reward)
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
         return selected.text
 
