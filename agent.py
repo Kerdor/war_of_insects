@@ -25,7 +25,7 @@ class Agent:
         if not actions:
             return None
 
-        selected_key = self.learning.choose(state_key, actions, self.epsilon)
+        selected_key = self.learning.choose(state_key, actions, self.epsilon, self.transitions)
         selected = next(action for action in state.available_actions if (action.key or action.text) == selected_key)
 
         await self._click(message, selected)
