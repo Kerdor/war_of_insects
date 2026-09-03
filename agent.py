@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from learning import QLearning
 from memory import ExperienceMemory
@@ -17,6 +18,7 @@ class Agent:
         self.strategy = strategy or StrategyMemory()
         self.reward = RewardEngine()
         self.epsilon = 0.20
+        self.account_state = {}
 
     async def step(self, client, message, account_id):
         buttons = self._flatten_buttons(message)
@@ -28,9 +30,33 @@ class Agent:
             return None
 
         target = state.enemy_data.get("species") or state.enemy_data.get("name") or "unknown"
-        selected_key = self.learning.choose(state_key, actions, self.epsilon, self.transitions)
-        selected_key = self._apply_strategy_bonus(target, actions, selected_key)
+        context = self.account_state.setdefault(account_id, {
+            "recent_states": [],
+            "recent_actions": [],
+            "last_change": time.time(),
+            "epsilon": self.epsilon,
+        })
+        if context["recent_states"] and context["recent_states"][-1] != state_key:
+            context["last_change"] = time.time()
+        context["recent_states"].append(state_key)
+        context["recent_states"] = context["recent_states"][-8:]
+
+        if len(context["recent_states"]) >= 6 and len(set(context["recent_states"][-6:])) <= 2:
+            context["epsilon"] = min(0.50, context["epsilon"] + 0.10)
+        elif context["epsilon"] > self.epsilon:
+            context["epsilon"] = max(self.epsilon, context["epsilon"] - 0.02)
+
+        selected_key = self.learning.choose(
+            state_key,
+            actions,
+            context["epsilon"],
+            self.transitions,
+            self.strategy,
+            target,
+        )
         selected = next(action for action in state.available_actions if (action.key or action.text) == selected_key)
+        context["recent_actions"].append(selected_key)
+        context["recent_actions"] = context["recent_actions"][-20:]
 
         await self._click(message, selected)
         next_message = await self._wait_for_change(client, state_key)
@@ -49,22 +75,13 @@ class Agent:
         if self._is_terminal(next_state):
             outcome = self._outcome(next_state)
             final_target = next_state.enemy_data.get("species") or next_state.enemy_data.get("name") or target
-            self.strategy.record(target, selected_key, reward, outcome)
+            self.strategy.record(final_target, selected_key, reward, outcome)
             self.memory.add_episode_outcome(account_id, next_state, reward)
+            context["recent_states"] = []
+            context["recent_actions"] = []
+            context["epsilon"] = min(0.50, context["epsilon"] + 0.10) if outcome == "defeat" else max(self.epsilon, context["epsilon"] - 0.05)
 
         return selected.text
-
-    def _apply_strategy_bonus(self, target: str, actions: list[str], selected: str) -> str:
-        if not actions:
-            return selected
-        scores = {action: self.strategy.score(target, action) for action in actions}
-        best = max(scores.values(), default=0.0)
-        if best <= 0.0:
-            return selected
-        selected_score = scores.get(selected, 0.0)
-        if selected_score >= best:
-            return selected
-        return max(actions, key=lambda action: scores[action])
 
     async def _wait_for_change(self, client, state_key: str):
         for _ in range(10):
