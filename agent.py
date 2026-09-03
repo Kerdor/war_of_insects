@@ -4,13 +4,15 @@ from learning import QLearning
 from memory import ExperienceMemory
 from perception import Perception
 from reward import RewardEngine
+from transitions import TransitionMemory
 
 
 class Agent:
-    def __init__(self, learning=None, memory=None):
+    def __init__(self, learning=None, memory=None, transitions=None):
         self.perception = Perception()
         self.learning = learning or QLearning()
         self.memory = memory or ExperienceMemory()
+        self.transitions = transitions or TransitionMemory()
         self.reward = RewardEngine()
         self.epsilon = 0.20
 
@@ -37,6 +39,7 @@ class Agent:
         reward = self.reward.calculate(state, next_state)
 
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
+        self.transitions.record(state_key, selected_key, next_key, reward)
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
         return selected.text
 
