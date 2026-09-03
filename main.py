@@ -5,10 +5,10 @@ from config import ACCOUNTS
 from telegram_client import GameClient
 
 
-async def run_account(account):
+async def run_account(account, agent):
     client = GameClient(account)
-    agent = Agent()
 
+    print(f"Connecting: {account.session_name}")
     await client.connect()
     print(f"Connected: {account.session_name}")
 
@@ -29,8 +29,35 @@ async def main():
     if not ACCOUNTS:
         raise RuntimeError("No accounts configured. Set PHONE_N and SESSION_NAME_N in .env")
 
-    tasks = [asyncio.create_task(run_account(account)) for account in ACCOUNTS]
-    await asyncio.gather(*tasks)
+    agent = Agent()
+    clients = []
+
+    try:
+        for account in ACCOUNTS:
+            client = GameClient(account)
+            print(f"Connecting: {account.session_name}")
+            await client.connect()
+            print(f"Connected: {account.session_name}")
+            clients.append((account, client))
+
+        async def play(account, client):
+            try:
+                while True:
+                    message = await client.get_latest()
+                    if message is not None:
+                        try:
+                            await agent.step(client, message)
+                        except Exception as error:
+                            print(f"[{account.session_name}] Agent error: {error}")
+                    await asyncio.sleep(1.0)
+            finally:
+                await client.disconnect()
+
+        await asyncio.gather(*(play(account, client) for account, client in clients))
+    finally:
+        for _, client in clients:
+            if client.is_connected():
+                await client.disconnect()
 
 
 if __name__ == "__main__":
