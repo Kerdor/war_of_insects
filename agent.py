@@ -1,0 +1,65 @@
+import asyncio
+
+from learning import QLearning
+from memory import ExperienceMemory
+from perception import Perception
+from reward import RewardEngine
+
+
+class Agent:
+    def __init__(self):
+        self.perception = Perception()
+        self.learning = QLearning()
+        self.memory = ExperienceMemory()
+        self.reward = RewardEngine()
+        self.epsilon = 0.20
+
+    async def step(self, client, message):
+        buttons = self._flatten_buttons(message)
+        state = self.perception.parse(message.text or "", buttons)
+        state_key = self.perception.state_key(state)
+        actions = [action.key or action.text for action in state.available_actions]
+
+        if not actions:
+            return None
+
+        selected_key = self.learning.choose(state_key, actions, self.epsilon)
+        selected = next(action for action in state.available_actions if (action.key or action.text) == selected_key)
+
+        await self._click(message, selected)
+        await asyncio.sleep(1.0)
+
+        next_message = await client.get_latest()
+        if next_message is None:
+            return selected.text
+
+        next_state = self.perception.parse(next_message.text or "", self._flatten_buttons(next_message))
+        next_key = self.perception.state_key(next_state)
+        next_actions = [action.key or action.text for action in next_state.available_actions]
+        reward = self.reward.calculate(state, next_state)
+
+        self.memory.add(state_key, selected_key, next_key, reward)
+        self.learning.update(state_key, selected_key, reward, next_key, next_actions)
+        return selected.text
+
+    async def _click(self, message, action) -> None:
+        if action.callback_data is not None:
+            for row in message.buttons or []:
+                for button in row:
+                    data = getattr(button, "data", None)
+                    if isinstance(data, bytes):
+                        data = data.decode("utf-8", errors="replace")
+                    if data == action.callback_data:
+                        await button.click()
+                        return
+        for row in message.buttons or []:
+            for button in row:
+                if getattr(button, "text", "") == action.text:
+                    await button.click()
+                    return
+
+    def _flatten_buttons(self, message):
+        result = []
+        for row in message.buttons or []:
+            result.extend(row)
+        return result
