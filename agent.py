@@ -4,15 +4,17 @@ from learning import QLearning
 from memory import ExperienceMemory
 from perception import Perception
 from reward import RewardEngine
+from strategy import StrategyMemory
 from transitions import TransitionMemory
 
 
 class Agent:
-    def __init__(self, learning=None, memory=None, transitions=None):
+    def __init__(self, learning=None, memory=None, transitions=None, strategy=None):
         self.perception = Perception()
         self.learning = learning or QLearning()
         self.memory = memory or ExperienceMemory()
         self.transitions = transitions or TransitionMemory()
+        self.strategy = strategy or StrategyMemory()
         self.reward = RewardEngine()
         self.epsilon = 0.20
 
@@ -25,7 +27,9 @@ class Agent:
         if not actions:
             return None
 
+        target = state.enemy_data.get("species") or state.enemy_data.get("name") or "unknown"
         selected_key = self.learning.choose(state_key, actions, self.epsilon, self.transitions)
+        selected_key = self._apply_strategy_bonus(target, actions, selected_key)
         selected = next(action for action in state.available_actions if (action.key or action.text) == selected_key)
 
         await self._click(message, selected)
@@ -43,9 +47,24 @@ class Agent:
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
 
         if self._is_terminal(next_state):
+            outcome = self._outcome(next_state)
+            final_target = next_state.enemy_data.get("species") or next_state.enemy_data.get("name") or target
+            self.strategy.record(target, selected_key, reward, outcome)
             self.memory.add_episode_outcome(account_id, next_state, reward)
 
         return selected.text
+
+    def _apply_strategy_bonus(self, target: str, actions: list[str], selected: str) -> str:
+        if not actions:
+            return selected
+        scores = {action: self.strategy.score(target, action) for action in actions}
+        best = max(scores.values(), default=0.0)
+        if best <= 0.0:
+            return selected
+        selected_score = scores.get(selected, 0.0)
+        if selected_score >= best:
+            return selected
+        return max(actions, key=lambda action: scores[action])
 
     async def _wait_for_change(self, client, state_key: str):
         for _ in range(10):
@@ -83,6 +102,14 @@ class Agent:
             or "побежден" in text
             or "победил" in text
         )
+
+    def _outcome(self, state) -> str:
+        text = state.raw_text.lower()
+        if "погиб" in text or "проиграл" in text:
+            return "defeat"
+        if "все враги повержены" in text or "побежден" in text or "победил" in text:
+            return "victory"
+        return "unknown"
 
     def _flatten_buttons(self, message):
         result = []
