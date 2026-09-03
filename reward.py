@@ -11,6 +11,8 @@ class RewardEngine:
         reward += self._numeric_delta(before.self_data, after.self_data, "water", -0.01)
 
         reward += self._numeric_delta(before.enemy_data, after.enemy_data, "hp", -0.08)
+        reward += self._body_part_delta(before.self_data, after.self_data, -0.12)
+        reward += self._body_part_delta(before.enemy_data, after.enemy_data, 0.12)
         reward += self._skill_delta(before.self_data, after.self_data)
         reward += self._inventory_delta(before.inventory, after.inventory)
 
@@ -36,6 +38,19 @@ class RewardEngine:
         if not isinstance(before_value, (int, float)) or not isinstance(after_value, (int, float)):
             return 0.0
         return (after_value - before_value) * multiplier
+
+    def _body_part_delta(self, before, after, multiplier: float) -> float:
+        before_parts = before.get("body_parts", {})
+        after_parts = after.get("body_parts", {})
+        reward = 0.0
+        for part, value in after_parts.items():
+            if part.endswith("_max"):
+                continue
+            previous = before_parts.get(part)
+            if not isinstance(previous, (int, float)) or not isinstance(value, (int, float)):
+                continue
+            reward += (value - previous) * multiplier
+        return reward
 
     def _skill_delta(self, before, after) -> float:
         before_skills = before.get("skills", {})
