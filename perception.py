@@ -58,15 +58,14 @@ class Perception:
 
     def _parse_creature(self, text: str, section: str) -> dict:
         result = {}
-        marker = text.find(section)
-        if marker < 0:
+        chunk = self._section_chunk(text, section)
+        if not chunk:
             return result
-        chunk = text[marker:]
 
         patterns = {
             "level": r"(?:Уровень|уровень)\s*[:№]?\s*(\d+)",
             "experience": r"(?:Опыт|опыт)\s*[:№]?\s*(\d+)\s*(?:/\s*(\d+))?",
-            "hp": r"(?:Здоровье|HP|ХП|Состояние)\s*[:№]?\s*(\d+)\s*(?:/\s*(\d+))?",
+            "hp": r"(?:Здоровье|HP|ХП|Состояние)\s*[:№]?\s*(-?\d+)\s*(?:/\s*(-?\d+))?",
             "hunger": r"(?:Голод)\s*[:№]?\s*(\d+)\s*(?:/\s*(\d+))?",
             "water": r"(?:Вода)\s*[:№]?\s*(\d+)\s*(?:/\s*(\d+))?",
             "weight": r"(?:Вес)\s*[:№]?\s*([\d.,]+)\s*(?:/\s*([\d.,]+))?",
@@ -86,10 +85,70 @@ class Perception:
         if name:
             result["name"] = name.group(1).strip()
 
-        body_match = re.search(r"\[([💀🪲🪱⚔;\d\s]+)\]", chunk)
-        if body_match:
-            result["body_raw"] = body_match.group(1).strip()
+        result["body_parts"] = self._parse_body_parts(chunk)
+        result["skills"] = self._parse_skills(chunk)
+        return result
 
+    def _section_chunk(self, text: str, section: str) -> str:
+        marker = text.lower().find(section.lower())
+        if marker < 0:
+            return ""
+        end_markers = (
+            "вражеские существа",
+            "инвентарь",
+            "профиль",
+            "навыки",
+            "основное",
+            "какoв ваш приказ?",
+        )
+        end = len(text)
+        for end_marker in end_markers:
+            position = text.lower().find(end_marker, marker + len(section))
+            if position >= 0 and position < end:
+                end = position
+        return text[marker:end]
+
+    def _parse_body_parts(self, text: str) -> dict[str, int]:
+        result = {}
+        aliases = {
+            "голова": "head",
+            "голову": "head",
+            "грудь": "chest",
+            "грудь": "chest",
+            "живот": "abdomen",
+            "брюшко": "abdomen",
+        }
+        for russian, key in aliases.items():
+            match = re.search(rf"{re.escape(russian)}\s*[:—-]?\s*(-?\d+)(?:\s*/\s*(-?\d+))?", text, re.IGNORECASE)
+            if match:
+                result[key] = int(match.group(1))
+                if match.group(2):
+                    result[f"{key}_max"] = int(match.group(2))
+
+        leg_patterns = (
+            r"(?:нога|ноги|лапа|лапы)\s*(\d+)\s*[:—-]?\s*(-?\d+)",
+            r"(?:нога|лапа)\s*#?\s*(\d+)\s*[:—-]?\s*(-?\d+)",
+        )
+        for pattern in leg_patterns:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                result[f"leg_{match.group(1)}"] = int(match.group(2))
+        return result
+
+    def _parse_skills(self, text: str) -> dict[str, int]:
+        result = {}
+        skills = (
+            "Сила", "Ловкость", "Атлетика", "Восприятие",
+            "Атака", "Защита", "Уклонение",
+            "Режущее", "Рубящее", "Дробящее", "Кол  
+ющее",
+            "Скрытность", "Взлом", "Воровство",
+            "Общее ремесло", "Ковка оружия", "Ковка брони", "Зельеварение", "Готовка",
+            "Инженерия", "Медицина",
+        )
+        for skill in skills:
+            match = re.search(rf"{re.escape(skill)}\s*[:—-]?\s*(\d+)", text, re.IGNORECASE)
+            if match:
+                result[skill.lower()] = int(match.group(1))
         return result
 
     def _parse_inventory(self, text: str) -> dict[str, int]:
@@ -122,6 +181,7 @@ class Perception:
 
     def _normalize_creature(self, data: dict) -> dict:
         normalized = dict(data)
+        normalized.pop("name", None)
         hp = normalized.get("hp")
         hp_max = normalized.get("hp_max")
         if hp is not None and hp_max:
