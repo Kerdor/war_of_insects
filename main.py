@@ -5,26 +5,6 @@ from config import ACCOUNTS
 from telegram_client import GameClient
 
 
-async def run_account(account, agent):
-    client = GameClient(account)
-
-    print(f"Connecting: {account.session_name}")
-    await client.connect()
-    print(f"Connected: {account.session_name}")
-
-    try:
-        while True:
-            message = await client.get_latest()
-            if message is not None:
-                try:
-                    await agent.step(client, message)
-                except Exception as error:
-                    print(f"[{account.session_name}] Agent error: {error}")
-            await asyncio.sleep(1.0)
-    finally:
-        await client.disconnect()
-
-
 async def main():
     if not ACCOUNTS:
         raise RuntimeError("No accounts configured. Set PHONE_N and SESSION_NAME_N in .env")
@@ -46,7 +26,7 @@ async def main():
                     message = await client.get_latest()
                     if message is not None:
                         try:
-                            await agent.step(client, message)
+                            await agent.step(client, message, account.session_name)
                         except Exception as error:
                             print(f"[{account.session_name}] Agent error: {error}")
                     await asyncio.sleep(1.0)
