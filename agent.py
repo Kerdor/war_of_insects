@@ -5,17 +5,19 @@ from learning import QLearning
 from memory import ExperienceMemory
 from perception import Perception
 from reward import RewardEngine
+from stats import LearningStats
 from strategy import StrategyMemory
 from transitions import TransitionMemory
 
 
 class Agent:
-    def __init__(self, learning=None, memory=None, transitions=None, strategy=None):
+    def __init__(self, learning=None, memory=None, transitions=None, strategy=None, stats=None):
         self.perception = Perception()
         self.learning = learning or QLearning()
         self.memory = memory or ExperienceMemory()
         self.transitions = transitions or TransitionMemory()
         self.strategy = strategy or StrategyMemory()
+        self.stats = stats or LearningStats()
         self.reward = RewardEngine()
         self.epsilon = 0.20
         self.account_state = {}
@@ -71,12 +73,14 @@ class Agent:
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
         self.transitions.record(state_key, selected_key, next_key, reward)
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
+        self.stats.record_step(account_id, reward)
 
         if self._is_terminal(next_state):
             outcome = self._outcome(next_state)
             final_target = next_state.enemy_data.get("species") or next_state.enemy_data.get("name") or target
             self.strategy.record(final_target, selected_key, reward, outcome)
             self.memory.add_episode_outcome(account_id, next_state, reward)
+            self.stats.record_episode(account_id, outcome)
             context["recent_states"] = []
             context["recent_actions"] = []
             context["epsilon"] = min(0.50, context["epsilon"] + 0.10) if outcome == "defeat" else max(self.epsilon, context["epsilon"] - 0.05)
