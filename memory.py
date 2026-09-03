@@ -8,9 +8,10 @@ class ExperienceMemory:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    def add(self, state_before: str, action: str, state_after: str, reward: float) -> None:
+    def add(self, account_id: str, state_before: str, action: str, state_after: str, reward: float) -> None:
         item = {
             "timestamp": time.time(),
+            "account_id": account_id,
             "state_before": state_before,
             "action": action,
             "state_after": state_after,
