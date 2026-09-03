@@ -1,20 +1,58 @@
 class RewardEngine:
     def calculate(self, before, after) -> float:
         reward = 0.0
-        before_text = before.raw_text
-        after_text = after.raw_text
+        before_text = before.raw_text.lower()
+        after_text = after.raw_text.lower()
 
-        if "Все враги повержены" in after_text:
-            reward += 20.0
-        if "теряет сознание" in after_text.lower():
-            reward += 10.0
-        if "побежден" in after_text.lower() or "победил" in after_text.lower():
-            reward += 20.0
-        if "погиб" in after_text.lower() or "проиграл" in after_text.lower():
+        reward += self._numeric_delta(before.self_data, after.self_data, "experience", 0.02)
+        reward += self._numeric_delta(before.self_data, after.self_data, "level", 10.0)
+        reward += self._numeric_delta(before.self_data, after.self_data, "hp", -0.08)
+        reward += self._numeric_delta(before.self_data, after.self_data, "hunger", -0.01)
+        reward += self._numeric_delta(before.self_data, after.self_data, "water", -0.01)
+
+        reward += self._numeric_delta(before.enemy_data, after.enemy_data, "hp", -0.08)
+        reward += self._skill_delta(before.self_data, after.self_data)
+        reward += self._inventory_delta(before.inventory, after.inventory)
+
+        if "все враги повержены" in after_text:
+            reward += 30.0
+        if "теряет сознание" in after_text:
+            reward += 12.0
+        if "побежден" in after_text or "победил" in after_text:
+            reward += 25.0
+        if "погиб" in after_text or "проиграл" in after_text:
             reward -= 100.0
+        if "нашел" in after_text or "найден" in after_text:
+            reward += 5.0
 
-        reward += self._damage_reward(before_text, after_text)
+        if after.events and after.events != before.events:
+            reward += 1.0
+
         return reward
 
-    def _damage_reward(self, before_text: str, after_text: str) -> float:
-        return 0.0
+    def _numeric_delta(self, before, after, key: str, multiplier: float) -> float:
+        before_value = before.get(key)
+        after_value = after.get(key)
+        if not isinstance(before_value, (int, float)) or not isinstance(after_value, (int, float)):
+            return 0.0
+        return (after_value - before_value) * multiplier
+
+    def _skill_delta(self, before, after) -> float:
+        before_skills = before.get("skills", {})
+        after_skills = after.get("skills", {})
+        reward = 0.0
+        for skill, value in after_skills.items():
+            previous = before_skills.get(skill)
+            if isinstance(previous, (int, float)) and isinstance(value, (int, float)) and value > previous:
+                reward += (value - previous) * 4.0
+        return reward
+
+    def _inventory_delta(self, before, after) -> float:
+        reward = 0.0
+        for item, value in after.items():
+            previous = before.get(item, 0)
+            if value > previous:
+                reward += min(value - previous, 10) * 1.5
+            elif value < previous:
+                reward -= min(previous - value, 10) * 0.5
+        return reward
