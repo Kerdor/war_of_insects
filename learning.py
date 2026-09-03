@@ -15,7 +15,7 @@ class QLearning:
     def get(self, state: str, action: str) -> float:
         return float(self.values.get(state, {}).get(action, 0.0))
 
-    def choose(self, state: str, actions: list[str], epsilon: float, transitions=None) -> str:
+    def choose(self, state: str, actions: list[str], epsilon: float, transitions=None, strategy=None, target: str = "unknown") -> str:
         if not actions:
             raise ValueError("No available actions")
 
@@ -28,6 +28,7 @@ class QLearning:
             visits = self.visits.get(state, {}).get(action, 0)
             exploration_bonus = 1.0 / (1.0 + visits) ** 0.5
             model_bonus = 0.0
+            strategy_bonus = 0.0
 
             if transitions is not None:
                 prediction = transitions.predict(state, action)
@@ -35,7 +36,10 @@ class QLearning:
                     _, predicted_reward = prediction
                     model_bonus = 0.25 * predicted_reward
 
-            scores.append(value + exploration_bonus + model_bonus)
+            if strategy is not None:
+                strategy_bonus = 0.25 * strategy.score(target, action)
+
+            scores.append(value + exploration_bonus + model_bonus + strategy_bonus)
 
         best = max(scores)
         candidates = [action for action, score in zip(actions, scores) if score == best]
