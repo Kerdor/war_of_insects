@@ -41,6 +41,10 @@ class Agent:
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
         self.transitions.record(state_key, selected_key, next_key, reward)
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
+
+        if self._is_terminal(next_state):
+            self.memory.add_episode_outcome(account_id, next_state, reward)
+
         return selected.text
 
     async def _wait_for_change(self, client, state_key: str):
@@ -69,6 +73,16 @@ class Agent:
                 if getattr(button, "text", "") == action.text:
                     await button.click()
                     return
+
+    def _is_terminal(self, state) -> bool:
+        text = state.raw_text.lower()
+        return (
+            "погиб" in text
+            or "проиграл" in text
+            or "все враги повержены" in text
+            or "побежден" in text
+            or "победил" in text
+        )
 
     def _flatten_buttons(self, message):
         result = []
