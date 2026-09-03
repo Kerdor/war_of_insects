@@ -1,0 +1,8 @@
+.env
+auth/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+logs/
