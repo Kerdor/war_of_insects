@@ -27,9 +27,7 @@ class Agent:
         selected = next(action for action in state.available_actions if (action.key or action.text) == selected_key)
 
         await self._click(message, selected)
-        await asyncio.sleep(1.0)
-
-        next_message = await client.get_latest()
+        next_message = await self._wait_for_change(client, state_key)
         if next_message is None:
             return selected.text
 
@@ -41,6 +39,17 @@ class Agent:
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
         return selected.text
+
+    async def _wait_for_change(self, client, state_key: str):
+        for _ in range(10):
+            await asyncio.sleep(0.5)
+            message = await client.get_latest()
+            if message is None:
+                continue
+            state = self.perception.parse(message.text or "", self._flatten_buttons(message))
+            if self.perception.state_key(state) != state_key:
+                return message
+        return await client.get_latest()
 
     async def _click(self, message, action) -> None:
         if action.callback_data is not None:
