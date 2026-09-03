@@ -21,11 +21,11 @@ class Perception:
     def state_key(self, state: GameState) -> str:
         data = {
             "location": state.location,
-            "current_action": state.current_action,
+            "current_action": self._normalize_action(state.current_action),
             "self": self._normalize_creature(state.self_data),
             "enemy": self._normalize_creature(state.enemy_data),
-            "inventory": state.inventory,
-            "events": state.events[-5:],
+            "inventory": self._normalize_inventory(state.inventory),
+            "events": self._normalize_events(state.events),
             "actions": sorted(action.key or action.text for action in state.available_actions),
         }
         payload = json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
@@ -180,25 +180,107 @@ class Perception:
     def _normalize_creature(self, data: dict) -> dict:
         normalized = dict(data)
         normalized.pop("name", None)
-        hp = normalized.get("hp")
-        hp_max = normalized.get("hp_max")
-        if hp is not None and hp_max:
-            normalized["hp_ratio"] = round(hp / hp_max, 3)
-            normalized.pop("hp", None)
-            normalized.pop("hp_max", None)
-        hunger = normalized.get("hunger")
-        hunger_max = normalized.get("hunger_max")
-        if hunger is not None and hunger_max:
-            normalized["hunger_ratio"] = round(hunger / hunger_max, 3)
-            normalized.pop("hunger", None)
-            normalized.pop("hunger_max", None)
-        water = normalized.get("water")
-        water_max = normalized.get("water_max")
-        if water is not None and water_max:
-            normalized["water_ratio"] = round(water / water_max, 3)
-            normalized.pop("water", None)
-            normalized.pop("water_max", None)
+        normalized["hp_state"] = self._ratio_bucket(normalized.pop("hp", None), normalized.pop("hp_max", None))
+        normalized["hunger_state"] = self._ratio_bucket(normalized.pop("hunger", None), normalized.pop("hunger_max", None))
+        normalized["water_state"] = self._ratio_bucket(normalized.pop("water", None), normalized.pop("water_max", None))
+        normalized["weight_state"] = self._ratio_bucket(normalized.pop("weight", None), normalized.pop("weight_max", None))
+
+        if "experience" in normalized:
+            normalized["experience"] = self._experience_bucket(normalized["experience"], normalized.get("experience_max"))
+            normalized.pop("experience_max", None)
+
+        if "level" in normalized:
+            normalized["level"] = self._level_bucket(normalized["level"])
+
+        if "body_parts" in normalized:
+            normalized["body_parts"] = self._normalize_body_parts(normalized["body_parts"])
+        if "skills" in normalized:
+            normalized["skills"] = self._normalize_skills(normalized["skills"])
         return normalized
+
+    def _normalize_body_parts(self, parts: dict) -> dict:
+        result = {}
+        for key, value in parts.items():
+            if key.endswith("_max"):
+                continue
+            maximum = parts.get(f"{key}_max")
+            result[key] = self._ratio_bucket(value, maximum)
+        return result
+
+    def _normalize_skills(self, skills: dict) -> dict:
+        return {key: self._level_bucket(value) for key, value in skills.items()}
+
+    def _normalize_inventory(self, inventory: dict[str, int]) -> dict[str, str]:
+        return {name: self._quantity_bucket(quantity) for name, quantity in inventory.items()}
+
+    def _normalize_events(self, events: list[str]) -> list[str]:
+        result = []
+        for event in events[-5:]:
+            lowered = event.lower()
+            if "погиб" in lowered or "проиграл" in lowered:
+                result.append("defeat")
+            elif "теряет сознание" in lowered:
+                result.append("unconscious")
+            elif "победил" in lowered or "побежден" in lowered:
+                result.append("victory")
+            elif "уровень повышен" in lowered:
+                result.append("level_up")
+            elif "нашел" in lowered or "найден" in lowered or "получен" in lowered or "получено" in lowered:
+                result.append("loot")
+            elif "получил" in lowered:
+                result.append("gain")
+        return result
+
+    def _normalize_action(self, action: str) -> str:
+        return action.strip().lower() if action else "unknown"
+
+    def _ratio_bucket(self, value, maximum) -> str:
+        if value is None or maximum in (None, 0):
+            return "unknown"
+        ratio = value / maximum
+        if ratio <= 0:
+            return "empty"
+        if ratio <= 0.25:
+            return "critical"
+        if ratio <= 0.50:
+            return "low"
+        if ratio <= 0.75:
+            return "medium"
+        return "high"
+
+    def _level_bucket(self, value: int) -> str:
+        if value <= 1:
+            return "1"
+        if value <= 3:
+            return "2-3"
+        if value <= 5:
+            return "4-5"
+        if value <= 10:
+            return "6-10"
+        return "11+"
+
+    def _experience_bucket(self, value, maximum) -> str:
+        if maximum in (None, 0):
+            return "unknown"
+        ratio = value / maximum
+        if ratio >= 0.75:
+            return "near_level"
+        if ratio >= 0.50:
+            return "mid"
+        if ratio > 0.0:
+            return "early"
+        return "zero"
+
+    def _quantity_bucket(self, quantity: int) -> str:
+        if quantity <= 0:
+            return "0"
+        if quantity <= 2:
+            return "1-2"
+        if quantity <= 5:
+            return "3-5"
+        if quantity <= 10:
+            return "6-10"
+        return "11+"
 
     def _number(self, value: str):
         value = value.replace(",", ".")
