@@ -1,4 +1,5 @@
 import json
+import random
 from pathlib import Path
 
 
@@ -34,6 +35,16 @@ class StrategyMemory:
         win_rate = bucket.get("victories", 0) / count
         loss_rate = bucket.get("defeats", 0) / count
         return average_reward + 10.0 * win_rate - 10.0 * loss_rate
+
+    def choose(self, target: str, actions: list[str], epsilon: float) -> str | None:
+        if not actions:
+            return None
+        if random.random() < epsilon:
+            return random.choice(actions)
+        scores = {action: self.score(target, action) for action in actions}
+        best = max(scores.values())
+        candidates = [action for action, score in scores.items() if score == best]
+        return random.choice(candidates)
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
