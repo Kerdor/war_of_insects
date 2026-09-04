@@ -1,6 +1,6 @@
 # PROJECT STATE
 
-## 2026-09-04 — Runtime fixes, self-learning loop, development runner, official knowledge normalization and retrieval
+## 2026-09-04 — Runtime fixes, self-learning loop, development runner, official knowledge normalization, retrieval and conflict-aware learning
 
 ### Current structure
 
@@ -81,19 +81,21 @@ Added `bot/knowledge_retrieval.py`.
 
 The retriever is dependency-free and currently lexical so it works offline and does not require an embedding service. It:
 - recursively loads Markdown from `data/knowledge/official/` and `data/knowledge/learned/`;
-- keeps source, domain, keywords and related-document metadata;
+- keeps source, domain, status, keywords and related-document metadata;
 - splits documents by Markdown headings and then into bounded chunks while preserving section context;
 - ranks chunks by query-term coverage, term density, metadata matches, exact phrase matches and source trust;
 - gives official knowledge a higher trust bonus than learned observations;
 - supports filtering by `domain` and `source`;
-- can exclude learned knowledge entirely;
+- excludes `conflicted` learned documents from normal retrieval by default;
+- can explicitly include conflicted learned knowledge for analyst investigation;
+- labels conflicted context as `LEARNED-CONFLICT` and lowers its retrieval trust;
 - builds bounded context suitable for sending to Qwen;
-- explicitly tells Qwen that learned observations are hypotheses and must not override explicit official rules.
+- explicitly tells Qwen that learned observations are hypotheses and must not override explicit official rules or unresolved conflicts.
 
 The public retrieval interface is:
 - `KnowledgeRetriever.search(...)` — ranked `KnowledgeHit` objects;
 - `KnowledgeRetriever.build_context(...)` — bounded source-labelled context;
-- `KnowledgeRetriever.build_qwen_prompt_context(...)` — Qwen-ready context with source precedence instructions.
+- `KnowledgeRetriever.build_qwen_prompt_context(...)` — Qwen-ready context with source precedence and conflict instructions.
 
 The design intentionally avoids hard-coding game routes. Retrieval supplies knowledge to the analyst; Q-learning remains responsible for choosing actions.
 
@@ -112,7 +114,7 @@ The runtime flow is now:
 
 ### Repeated-evidence confirmation — 2026-09-04
 
-`KnowledgeWriter` now maintains a persistent evidence ledger at `data/knowledge/learned/.evidence.json`.
+`KnowledgeWriter` maintains a persistent evidence ledger at `data/knowledge/learned/.evidence.json`.
 
 Each learned claim is aggregated by deterministic claim hash. Every observation stores:
 - stable observation ID derived from account + before/after state + action + reward;
@@ -129,11 +131,31 @@ Promotion rules are deliberately conservative:
 
 Qwen itself cannot promote knowledge. Only repeated runtime evidence can do so. Confirmed knowledge remains under `learned/`; it does not become official and cannot overwrite official documentation.
 
-The generated Markdown now exposes support counts, independent-account counts and the accumulated evidence so the retrieval layer can distinguish weak hypotheses from repeatedly observed mechanics.
+The generated Markdown exposes support counts, independent-account counts and the accumulated evidence.
+
+### Contradiction handling — 2026-09-04
+
+The learned-knowledge layer now distinguishes repeated support from contradictory observations.
+
+Qwen candidates may provide:
+- `mechanic_key` — a stable topic identifier for the underlying mechanic rather than the wording of a claim;
+- `relation` — `new`, `supports`, `contradicts` or `unclear`;
+- `conflicts_with` — exact existing learned claim text when Qwen identifies a material contradiction.
+
+Conflict handling is conservative:
+- a contradiction is accepted only when Qwen identifies the same mechanic key and an exact existing claim target;
+- different conditions, exceptions or contexts are not automatically considered contradictions;
+- both sides remain stored as evidence;
+- both conflicting claims become `conflicted` and cannot be promoted to `candidate` or `confirmed` while the conflict remains active;
+- no learned claim is deleted or silently merged;
+- conflicted Markdown contains an explicit conflict section and conflict references;
+- the target claim's persisted Markdown is updated immediately when a conflict is detected.
+
+The retriever excludes conflicted learned knowledge from normal agent context, preventing unresolved observations from influencing ordinary knowledge use. Qwen analysis can explicitly include those entries so it can recognize and investigate the unresolved disagreement.
 
 ### Qwen configuration
 
-`.env.example` now documents:
+`.env.example` documents:
 - `QWEN_ENABLED=false` — opt-in switch;
 - `QWEN_API_KEY`;
 - `QWEN_BASE_URL` (OpenAI-compatible endpoint, default DashScope compatible-mode endpoint);
@@ -144,13 +166,17 @@ The generated Markdown now exposes support counts, independent-account counts an
 
 The analyst uses Python's standard-library HTTP client, so no additional package is required.
 
+### Runtime correction in Qwen integration — 2026-09-04
+
+Fixed the Qwen analyst's retrieval call to use the current `build_qwen_prompt_context()` interface. The analyst now explicitly requests conflicted knowledge for investigation instead of passing the obsolete `include_learned` argument.
+
 ### Current learning boundary
 
-Q-learning still owns action selection. The Qwen analyst is an asynchronous observation/knowledge-extraction subsystem only. Retrieval supplies context; analyst output becomes learned hypotheses; repeated evidence can promote them to confirmed learned knowledge without changing the action policy directly.
+Q-learning still owns action selection. The Qwen analyst is an asynchronous observation/knowledge-extraction subsystem only. Retrieval supplies context; analyst output becomes learned hypotheses; repeated evidence can promote them to confirmed learned knowledge without changing the action policy directly. Unresolved conflicts are kept out of normal learned context.
 
 ### Retrieval roadmap
 
-Future improvements can add contradiction handling, semantic claim deduplication, richer cross-account evidence aggregation and optional semantic/embedding retrieval. These are deliberately not required for the current autonomous analyst loop.
+Future improvements can add semantic claim deduplication, automatic detection of contradictions without relying solely on an LLM relation label, richer cross-account evidence aggregation and optional semantic/embedding retrieval. These are deliberately separate from the current conservative conflict mechanism.
 
 ### Retrieval document standard
 
