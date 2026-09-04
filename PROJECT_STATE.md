@@ -29,6 +29,7 @@ war_of_insects/
 - `main.py`: cleanup uses the underlying Telethon client's `is_connected()`.
 - `agent.py` / `perception.py`: SwitchInline buttons are ignored; reply-keyboard actions are sent as messages; state/action/failure logging is enabled; persistent reply keyboard is merged with the current inline keyboard.
 - `telegram_client.py`: recent messages are scanned for keyboards; the persistent `ReplyKeyboardMarkup` is cached; `get_current_buttons()` combines current and persistent actions.
+- `telegram_client.py` / `agent.py`: optimized post-action polling so the agent no longer performs a second `get_messages()` request just to rebuild the already-cached persistent reply keyboard on every 0.5-second poll. This removes redundant Telegram API calls from the action-wait loop without changing Q-learning decisions.
 
 ### Multi-account behavior
 
@@ -142,20 +143,36 @@ Critical integration issue found and corrected:
 Additional consistency correction:
 - conflicted knowledge is now explicitly labelled `LEARNED-CONFLICT` when included for analyst investigation, matching the documented architecture.
 
-The local runtime itself has not yet been executed in this environment because the available GitHub connection can edit/read the repository but the execution environment cannot resolve GitHub for cloning. `self_check.py` is therefore prepared for the user's local machine, but its runtime result is not claimed here.
+### Runtime observation and performance fix — 2026-09-04
+
+First real local launch reached Telegram successfully with one enabled account and an already-authorized session.
+
+Observed behavior:
+- the agent detected the initial menu and available buttons;
+- Q-learning selected actions successfully;
+- however, the next state was taking roughly the full 5-second polling window to resolve in the observed log;
+- `Agent._wait_for_change()` was polling every 0.5 seconds, while each poll called `get_latest()` and then `get_current_buttons()`, which performed another Telegram history request to rebuild the persistent reply keyboard.
+
+Fix applied:
+- `GameClient.get_reply_keyboard_message()` now reuses the cached reply-keyboard message when available;
+- `Agent._wait_for_change()` now parses the buttons already returned by `get_latest()` and combines them with the cached reply keyboard directly;
+- the Q-learning decision logic, epsilon behavior and action-selection architecture were not changed.
+
+This should materially reduce redundant Telegram API traffic during the wait loop. The exact resulting latency still needs to be measured from the next local run.
+
+The environment used for repository editing cannot execute the user's Telegram session, so no claim is made that the post-fix runtime has already been verified here.
 
 ### Current launch boundary
 
-The project is now at the point where the next step should be an actual local run rather than another large architectural redesign.
+The project is now at the point where the next step should be another actual local run rather than another large architectural redesign.
 
 Recommended order:
-1. `pip install -r requirements.txt`
-2. copy `.env.example` to `.env` and fill credentials;
-3. run `python self_check.py`;
-4. if preflight passes, run `python main.py` with one enabled account first;
-5. verify real state → action → next state → reward → Q-learning flow;
-6. enable Qwen and verify analyst calls/learned output;
-7. only then enable additional accounts and long autonomous runs.
+1. let `dev_runner.py` pull the latest commit and restart automatically, or restart it manually;
+2. run with one enabled account first;
+3. verify that the delay between `Selected:` and the next `State:` is materially lower;
+4. verify real state → action → next state → reward → Q-learning flow;
+5. enable Qwen and verify analyst calls/learned output;
+6. only then enable additional accounts and long autonomous runs.
 
 ### Current learning boundary
 
