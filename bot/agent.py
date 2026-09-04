@@ -31,10 +31,11 @@ class Agent:
         buttons = await client.get_current_buttons(message)
         state = self.perception.parse(message.text or "", buttons)
         state_key = self.perception.state_key(state)
-        actions = [action.key or action.text for action in state.available_actions]
+        selectable_actions = self._selectable_actions(state)
+        actions = [action.key or action.text for action in selectable_actions]
 
         if not actions:
-            print(f"[{account_id}] No actions detected | State: {state.location} | Buttons: {len(buttons)}")
+            print(f"[{account_id}] No safe actions detected | State: {state.location} | Buttons: {len(buttons)}")
             return None
 
         target = state.enemy_data.get("species") or state.enemy_data.get("name") or "unknown"
@@ -62,11 +63,11 @@ class Agent:
             self.strategy,
             target,
         )
-        selected = next(action for action in state.available_actions if (action.key or action.text) == selected_key)
+        selected = next(action for action in selectable_actions if (action.key or action.text) == selected_key)
         context["recent_actions"].append(selected_key)
         context["recent_actions"] = context["recent_actions"][-20:]
 
-        print(f"[{account_id}] State: {state.location} | Actions: {', '.join(action.text for action in state.available_actions)}")
+        print(f"[{account_id}] State: {state.location} | Actions: {', '.join(action.text for action in selectable_actions)}")
         print(f"[{account_id}] Selected: {selected.text}")
 
         clicked = await self._click(client, message, selected)
@@ -81,7 +82,7 @@ class Agent:
         next_buttons = await client.get_current_buttons(next_message)
         next_state = self.perception.parse(next_message.text or "", next_buttons)
         next_key = self.perception.state_key(next_state)
-        next_actions = [action.key or action.text for action in next_state.available_actions]
+        next_actions = [action.key or action.text for action in self._selectable_actions(next_state)]
         reward = self.reward.calculate(state, next_state)
 
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
@@ -112,6 +113,36 @@ class Agent:
             context["epsilon"] = min(0.50, context["epsilon"] + 0.10) if outcome == "defeat" else max(self.epsilon, context["epsilon"] - 0.05)
 
         return selected.text
+
+    def _selectable_actions(self, state):
+        dangerous_markers = (
+            "перейти к оплате",
+            "купить кредит",
+            "купить",
+            "выкинуть",
+            "удалить",
+        )
+        safe = []
+        for action in state.available_actions:
+            text = action.text.strip().lower()
+            if any(marker in text for marker in dangerous_markers):
+                continue
+            safe.append(action)
+
+        if state.location == "tutorial":
+            next_actions = [action for action in safe if action.text.strip().lower() == "🔘далее"]
+            if next_actions:
+                return next_actions
+
+        if state.location == "help":
+            navigation = [
+                action for action in safe
+                if action.text.strip().lower() in {"🔙назад", "🔘далее"}
+            ]
+            if navigation:
+                return navigation
+
+        return safe
 
     async def _wait_for_change(self, client, state_key: str):
         for _ in range(10):
