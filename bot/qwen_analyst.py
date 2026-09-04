@@ -14,7 +14,8 @@ class QwenAnalyst:
     """Observes completed transitions and extracts durable knowledge.
 
     This component never chooses or executes gameplay actions. Q-learning remains
-    the only action-selection layer.
+    the only action-selection layer. Qwen may provide a bounded evidence-based
+    learning signal about the observed transition.
     """
 
     def __init__(self, retriever=None, writer=None):
@@ -51,12 +52,11 @@ class QwenAnalyst:
         state_after,
         reward: float,
         recent_actions: list[str],
-    ) -> None:
+    ) -> dict[str, Any]:
         if not self.enabled or not self.api_key:
-            return
+            return {"learning_signal": 0.0}
+
         lock = self.locks.setdefault(account_id, asyncio.Lock())
-        if lock.locked():
-            return
         async with lock:
             try:
                 observation_id = self._observation_id(
@@ -75,12 +75,17 @@ class QwenAnalyst:
                     reward,
                     recent_actions,
                 )
-                if result:
-                    written = self.writer.write_candidates(result, account_id, observation_id)
+                candidates = result.get("candidates", [])
+                if candidates:
+                    written = self.writer.write_candidates(candidates, account_id, observation_id)
                     if written:
                         print(f"[{account_id}] Qwen analyst: wrote/updated {len(written)} knowledge candidate(s)")
+                learning_signal = self._bounded_signal(result.get("learning_signal", 0.0))
+                print(f"[{account_id}] Qwen learning signal: {learning_signal:+.2f}")
+                return {"learning_signal": learning_signal}
             except Exception as exc:
                 print(f"[{account_id}] Qwen analyst error: {exc}")
+                return {"learning_signal": 0.0}
 
     def _analyze_sync(self, account_id, state_before, action, state_after, reward, recent_actions):
         query_parts = [state_before.location, state_before.current_action, action]
@@ -118,7 +123,7 @@ class QwenAnalyst:
                     "content": (
                         "You are a game-mechanics analyst for a reinforcement-learning agent. "
                         "Do not choose actions, do not give commands to execute, and do not invent rules. "
-                        "Extract only durable knowledge supported by the observed transition and supplied sources."
+                        "Evaluate only the observed transition and extract durable knowledge supported by evidence."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -152,13 +157,20 @@ class QwenAnalyst:
     def _build_prompt(self, payload: dict[str, Any]) -> str:
         return (
             "Analyze exactly one gameplay transition. Return JSON only, with this schema:\n"
-            "{\"candidates\":[{\"type\":\"mechanic|action_consequence|prerequisite|exception|hypothesis\","
+            "{\"learning_signal\":0.0,\"candidates\":[{\"type\":\"mechanic|action_consequence|prerequisite|exception|hypothesis\","
             "\"claim\":\"...\",\"mechanic_key\":\"stable_machine_readable_topic\","
             "\"relation\":\"new|supports|contradicts|unclear\",\"conflicts_with\":[\"claim text\"],"
             "\"domain\":\"...\",\"confidence\":0.0,\"status\":\"hypothesis|candidate\","
             "\"conditions\":\"...\",\"consequences\":\"...\",\"exceptions\":\"...\","
             "\"evidence\":[\"...\"],\"related\":[\"...\"]}]}\n\n"
-            "Rules:\n"
+            "Rules for learning_signal:\n"
+            "- It evaluates the quality of the observed action outcome, not which action should be selected.\n"
+            "- Use a small numeric signal from -5.0 to +5.0.\n"
+            "- Positive only when the observed transition provides evidence of a useful outcome.\n"
+            "- Negative only when the observed transition provides evidence of a harmful outcome.\n"
+            "- Use 0.0 when the outcome is neutral, ambiguous, or insufficiently observable.\n"
+            "- Do not infer a reward merely because an action is plausible.\n"
+            "Rules for candidates:\n"
             "- Produce at most 5 candidates.\n"
             "- Confidence must reflect evidence, not plausibility.\n"
             "- A single transition normally supports a hypothesis, not a confirmed rule.\n"
@@ -171,12 +183,12 @@ class QwenAnalyst:
             "- If retrieved knowledge contains a conflict, do not resolve it by guessing. Preserve uncertainty and use relation=unclear when evidence is insufficient.\n"
             "- Do not use conflicted knowledge as an authoritative rule.\n"
             "- Do not copy large source passages.\n"
-            "- If there is not enough evidence for durable knowledge, return {\"candidates\":[]}.\n\n"
+            "- If there is not enough evidence for durable knowledge, return an empty candidates list.\n\n"
             f"OBSERVATION:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
         )
 
     @staticmethod
-    def _parse_response(response: str) -> list[dict[str, Any]]:
+    def _parse_response(response: str) -> dict[str, Any]:
         text = response.strip()
         if text.startswith("```"):
             lines = text.splitlines()
@@ -191,13 +203,28 @@ class QwenAnalyst:
             start = text.find("{")
             end = text.rfind("}")
             if start < 0 or end <= start:
-                return []
+                return {"learning_signal": 0.0, "candidates": []}
             try:
                 data = json.loads(text[start:end + 1])
             except json.JSONDecodeError:
-                return []
-        candidates = data.get("candidates", []) if isinstance(data, dict) else []
-        return candidates if isinstance(candidates, list) else []
+                return {"learning_signal": 0.0, "candidates": []}
+        if not isinstance(data, dict):
+            return {"learning_signal": 0.0, "candidates": []}
+        candidates = data.get("candidates", [])
+        if not isinstance(candidates, list):
+            candidates = []
+        return {
+            "learning_signal": data.get("learning_signal", 0.0),
+            "candidates": candidates,
+        }
+
+    @staticmethod
+    def _bounded_signal(value) -> float:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return max(-5.0, min(5.0, value))
 
     @staticmethod
     def _observation_id(account_id, state_before, action, state_after, reward) -> str:
