@@ -33,7 +33,7 @@ class QLearning:
             if transitions is not None:
                 prediction = transitions.predict(state, action)
                 if prediction is not None:
-                    _, predicted_reward = prediction
+                    _, _, predicted_reward = prediction
                     model_bonus = 0.25 * predicted_reward
 
             if strategy is not None:
