@@ -60,13 +60,30 @@ Knowledge is intentionally divided into:
 - `data/knowledge/official/` — trusted/reference information from the official game documentation and tutorial;
 - `data/knowledge/learned/` — future observations, hypotheses, discovered mechanics, action consequences and other experience-derived information.
 
-Official source pages are retained as archival/context documents. For Qwen retrieval, the same information is additionally normalized into small topical files. This is preferred over putting everything into a few giant Markdown documents because retrieval can select a narrow concept without loading an entire handbook page.
+Official source pages are retained as archival/context documents. The normalized layer is a retrieval layer, not a summary layer: it must preserve the useful detail from the official source while splitting large pages into focused thematic documents.
 
 ### Qwen-friendly official knowledge structure — 2026-09-04
 
-Added `data/knowledge/official/README.md` as the knowledge map and `data/knowledge/official/commands.md` as a command-oriented lookup table.
+The first normalized pass was too compressed for reliable reasoning. It has now been corrected: detailed mechanics are kept in topical files instead of being reduced to short summaries.
 
-Normalized topics:
+Current combat retrieval structure:
+- `combat/damage.md` — navigation/index only;
+- `combat/damage_types.md` — detailed four damage types, mixed damage and stat relationships;
+- `combat/damage_effects.md` — bleeding, amputation, fractures and piercing;
+- `combat/armor.md` — body coverage, independent armor checks, damage calculation example and armor classes;
+- `combat/body_damage.md` — vital body parts, limbs, blood, unconsciousness, limb loss and restoration.
+
+`basics/skills.md` was expanded from a short summary into a detailed reference containing the official descriptions, effects and training methods for the ordinary core, combat, weapon, stealth/theft, crafting and science skills. The original `official/skills.md` remains the source document, including the separate innate-skill section.
+
+The standard for future normalized files is now:
+- preserve source detail rather than summarizing it away;
+- split only along meaningful retrieval boundaries;
+- keep conditions, effects, requirements, restrictions, exceptions and examples;
+- add lightweight frontmatter with stable `id`, `type`, `domain`, `source`, `keywords` and `related` fields;
+- use index files only for navigation, not as replacements for detailed knowledge.
+
+### Existing normalized topics
+
 - `basics/game_overview.md`
 - `basics/status.md`
 - `basics/body.md`
@@ -75,6 +92,10 @@ Normalized topics:
 - `exploration/locations.md`
 - `combat/combat.md`
 - `combat/damage.md`
+- `combat/damage_types.md`
+- `combat/damage_effects.md`
+- `combat/armor.md`
+- `combat/body_damage.md`
 - `items/overview.md`
 - `items/storage.md`
 - `items/food.md`
@@ -88,15 +109,7 @@ Normalized topics:
 - `clans/roles_permissions.md`
 - `tournaments/tournaments.md`
 - `squad/squad.md`
-
-The original source documents remain available:
-- `tutorial.md`
-- `guide.md`
-- `game_mechanics.md`
-- `exploration.md`
-- `items.md`
-- `skills.md`
-- `trading_crafting_clans_tournaments_squad.md`
+- `commands.md`
 
 ### Documentation history
 
@@ -104,9 +117,10 @@ The original source documents remain available:
 - Exploration source page: commit `54f42c54964b684ffd5c80819d6a9f0f52d55fe5`.
 - Items source page: commit `2ed86b547c645acdc3d2d6e5f36270fc1273115c`.
 - Trading/crafting/clans/tournaments/squad source page: commit `d379c6a4310e7863375be660865d6474a4d7ae57`.
-- Qwen normalization index: commit `ebbf14548f83a5916553fa4c3da72465aa953071`.
-- Qwen command index: commit `2a4803f190582986a40c9a8f43137cfc23754af6`.
+- Latest combat expansion: commit `7a79d7ed373ea80bfc54b1c6faf7fdc5abeb6cfb`.
+- Latest detailed skills restoration: commit `b61d5389a022cd81840991ac021670bdfd2237c0`.
+- Latest knowledge index standard: commit `5a09af9013e4fcf01616840b3aa6bbec71696fbb`.
 
 ### Design decision
 
-Do not delete the original source pages. They are the canonical archival layer. The normalized files are the retrieval layer. This gives Qwen both fast narrow retrieval and broader source context when necessary.
+Do not delete the original source pages. They are the canonical archival layer. The normalized files are the retrieval layer and should contain the same meaningful detail, only reorganized for targeted retrieval. This gives Qwen both fast narrow retrieval and broader source context when necessary.
