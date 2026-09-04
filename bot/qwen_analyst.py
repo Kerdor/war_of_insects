@@ -20,22 +20,18 @@ class QwenAnalyst:
 
     def __init__(self, retriever=None, writer=None):
         self.enabled = os.getenv("QWEN_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
-        self.api_key = os.getenv("QWEN_API_KEY", "").strip()
-        self.base_url = os.getenv(
-            "QWEN_BASE_URL",
-            "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        ).rstrip("/")
-        self.model = os.getenv("QWEN_MODEL", "qwen-plus").strip()
+        self.base_url = os.getenv("QWEN_BASE_URL", "http://localhost:11434").rstrip("/")
+        self.model = os.getenv("QWEN_MODEL", "qwen3:4b").strip()
         self.interval = max(1, int(os.getenv("QWEN_ANALYSIS_INTERVAL", "1")))
         self.max_tokens = max(256, int(os.getenv("QWEN_MAX_TOKENS", "1200")))
-        self.timeout = max(5, int(os.getenv("QWEN_TIMEOUT", "30")))
+        self.timeout = max(5, int(os.getenv("QWEN_TIMEOUT", "120")))
         self.retriever = retriever or KnowledgeRetriever()
         self.writer = writer or KnowledgeWriter()
         self.pending = {}
         self.locks = {}
 
     def should_analyze(self, account_id: str) -> bool:
-        if not self.enabled or not self.api_key:
+        if not self.enabled:
             return False
         count = self.pending.get(account_id, 0) + 1
         self.pending[account_id] = count
@@ -53,7 +49,7 @@ class QwenAnalyst:
         reward: float,
         recent_actions: list[str],
     ) -> dict[str, Any]:
-        if not self.enabled or not self.api_key:
+        if not self.enabled:
             return {"learning_signal": 0.0}
 
         lock = self.locks.setdefault(account_id, asyncio.Lock())
@@ -128,16 +124,17 @@ class QwenAnalyst:
                 },
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.1,
-            "max_tokens": self.max_tokens,
+            "stream": False,
+            "think": False,
+            "options": {
+                "temperature": 0.1,
+                "num_predict": self.max_tokens,
+            },
         }
         request = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
+            f"{self.base_url}/api/chat",
             data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
+            headers={"Content-Type": "application/json"},
             method="POST",
         )
         try:
@@ -150,8 +147,8 @@ class QwenAnalyst:
             raise RuntimeError(f"Qwen connection failed: {exc.reason}") from exc
 
         try:
-            return str(data["choices"][0]["message"]["content"])
-        except (KeyError, IndexError, TypeError) as exc:
+            return str(data["message"]["content"])
+        except (KeyError, TypeError) as exc:
             raise RuntimeError("Qwen returned an unexpected response") from exc
 
     def _build_prompt(self, payload: dict[str, Any]) -> str:
