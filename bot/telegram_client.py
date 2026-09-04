@@ -69,7 +69,10 @@ class GameClient:
     async def get_current_buttons(self, message):
         buttons = []
         for row in message.buttons or []:
-            buttons.extend(row)
+            if isinstance(row, (list, tuple)):
+                buttons.extend(row)
+            else:
+                buttons.append(row)
 
         if buttons:
             return buttons
@@ -77,6 +80,9 @@ class GameClient:
         reply_message = await self.get_reply_keyboard_message()
         if reply_message is not None and reply_message.id != message.id:
             for row in reply_message.buttons or []:
-                buttons.extend(row)
+                if isinstance(row, (list, tuple)):
+                    buttons.extend(row)
+                else:
+                    buttons.append(row)
 
         return buttons
