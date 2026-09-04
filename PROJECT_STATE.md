@@ -1,6 +1,6 @@
 # PROJECT STATE
 
-## 2026-09-04 — Runtime fixes, self-learning loop, development runner, official knowledge normalization, retrieval and conflict-aware learning
+## 2026-09-04 — Runtime fixes, self-learning loop, navigation safety and knowledge architecture
 
 ### Current structure
 
@@ -46,7 +46,7 @@ war_of_insects/
 
 The agent uses perception/state normalization, Q-learning, transition memory, strategy memory, experience memory, reward calculation, per-account runtime context and learning statistics.
 
-Q-learning remains responsible for autonomous action selection. The Qwen analyst observes gameplay and extracts durable knowledge instead of hardcoding routes.
+Q-learning remains responsible for autonomous action selection. Qwen observes gameplay and extracts durable knowledge instead of hardcoding routes.
 
 ### Knowledge architecture
 
@@ -138,7 +138,7 @@ The preflight does not connect to Telegram and does not call the Qwen API.
 The repository was audited across the current agent, Q-learning, Telegram client, configuration, Qwen analyst, retrieval and knowledge writer integration points.
 
 Critical integration issue found and corrected:
-- `QwenAnalyst` was calling `build_qwen_prompt_context()` with the obsolete `include_learned` argument. This would fail when Qwen analysis was actually triggered. The call now matches the current retrieval interface.
+- `QwenAnalyst` was calling `build_qwen_prompt_context()` with the obsolete `include_learned` argument. The call now matches the current retrieval interface.
 
 Additional consistency correction:
 - conflicted knowledge is now explicitly labelled `LEARNED-CONFLICT` when included for analyst investigation, matching the documented architecture.
@@ -158,30 +158,47 @@ Fix applied:
 - `Agent._wait_for_change()` now parses the buttons already returned by `get_latest()` and combines them with the cached reply keyboard directly;
 - the Q-learning decision logic, epsilon behavior and action-selection architecture were not changed.
 
-This should materially reduce redundant Telegram API traffic during the wait loop. The exact resulting latency still needs to be measured from the next local run.
+The user's subsequent runtime log showed the action loop becoming fast. The remaining issue was not latency but action quality: untrained Q-learning was exploring arbitrary menu actions.
 
-The environment used for repository editing cannot execute the user's Telegram session, so no claim is made that the post-fix runtime has already been verified here.
+### Autonomous navigation safety and state recognition — 2026-09-04
+
+Runtime observation showed a critical bootstrap problem:
+- many menu screens were classified as `unknown` because perception relied mainly on message text;
+- a new/weakly trained Q-table therefore treated unrelated menu buttons as equally viable actions;
+- this caused random navigation into help, tutorial, payment and other non-game screens.
+
+Fix applied:
+- `Perception` now parses buttons before location detection and uses distinctive button signatures in addition to text markers;
+- exploration, skills, equipment, inventory, tutorial, main menu and help screens can now be recognized from their button sets;
+- `Agent` now filters obviously dangerous/non-game actions such as payment, purchasing, deletion and discarding before passing actions to Q-learning;
+- tutorial screens with `🔘Далее` are bootstrapped deterministically when that action is available;
+- help screens prefer navigation (`🔙Назад` / `🔘Далее`) instead of random topic/external actions;
+- the Q-learning algorithm itself remains unchanged and continues to choose among the remaining meaningful actions.
+
+This is a safety/bootstrap layer around Q-learning, not a hardcoded gameplay route. Real gameplay actions remain available for autonomous learning.
 
 ### Current launch boundary
 
-The project is now at the point where the next step should be another actual local run rather than another large architectural redesign.
+The next local run should verify the navigation fix before any further architecture changes.
 
 Recommended order:
-1. let `dev_runner.py` pull the latest commit and restart automatically, or restart it manually;
-2. run with one enabled account first;
-3. verify that the delay between `Selected:` and the next `State:` is materially lower;
-4. verify real state → action → next state → reward → Q-learning flow;
-5. enable Qwen and verify analyst calls/learned output;
-6. only then enable additional accounts and long autonomous runs.
+1. let `dev_runner.py` pull the latest commit and restart automatically;
+2. run with one enabled account;
+3. verify that common menus receive meaningful state labels instead of `unknown`;
+4. verify that payment/purchase/discard actions are never selected autonomously;
+5. verify that tutorial navigation uses `🔘Далее` when appropriate;
+6. verify real gameplay state → action → next state → reward → Q-learning flow;
+7. enable Qwen and verify analyst calls/learned output;
+8. only then enable additional accounts and long autonomous runs.
 
 ### Current learning boundary
 
 Q-learning still owns action selection. Qwen is an asynchronous observation/knowledge-extraction subsystem. Retrieval supplies context; writer persists learned hypotheses and evidence. Confirmed learned knowledge does not become official and does not directly override Q-learning.
 
-### Roadmap after first real run
+### Roadmap after the navigation fix
 
 The next improvements should be driven by observed runtime behavior. Likely areas are:
-- improving state representation where real Telegram states are ambiguous;
+- improving state representation where real Telegram states are still ambiguous;
 - tuning reward signals from real outcomes;
 - semantic deduplication of paraphrased claims;
 - stronger automatic contradiction detection independent of LLM labels;
