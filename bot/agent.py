@@ -83,7 +83,7 @@ class Agent:
         next_state = self.perception.parse(next_message.text or "", next_buttons)
         next_key = self.perception.state_key(next_state)
         next_actions = [action.key or action.text for action in self._selectable_actions(next_state)]
-        reward = self.reward.calculate(state, next_state)
+        reward = self.reward.calculate(state, next_state, selected.text)
 
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
         self.transitions.record(state_key, selected_key, next_key, reward)
