@@ -81,6 +81,7 @@ class Agent:
         next_buttons = await client.get_current_buttons(next_message)
         next_state = self.perception.parse(next_message.text or "", next_buttons)
         next_key = self.perception.state_key(next_state)
+        next_actions = [action.key or action.text for action in next_state.available_actions]
         reward = self.reward.calculate(state, next_state)
 
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
