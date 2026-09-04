@@ -62,7 +62,14 @@ class Agent:
         context["recent_actions"].append(selected_key)
         context["recent_actions"] = context["recent_actions"][-20:]
 
-        await self._click(message, selected)
+        print(f"[{account_id}] State: {state.location} | Actions: {', '.join(action.text for action in state.available_actions)}")
+        print(f"[{account_id}] Selected: {selected.text}")
+
+        clicked = await self._click(client, message, selected)
+        if not clicked:
+            print(f"[{account_id}] Action was not clicked: {selected.text}")
+            return selected.text
+
         next_message = await self._wait_for_change(client, state_key)
         if next_message is None:
             return selected.text
@@ -100,7 +107,7 @@ class Agent:
                 return message
         return await client.get_latest()
 
-    async def _click(self, message, action) -> None:
+    async def _click(self, client, message, action) -> bool:
         if action.callback_data is not None:
             for row in message.buttons or []:
                 for button in row:
@@ -109,14 +116,16 @@ class Agent:
                         data = data.decode("utf-8", errors="replace")
                     if data == action.callback_data:
                         await button.click()
-                        return
+                        return True
+
         for row in message.buttons or []:
             for button in row:
                 if isinstance(getattr(button, "button", None), KeyboardButtonSwitchInline):
                     continue
                 if getattr(button, "text", "") == action.text:
-                    await button.click()
-                    return
+                    await client.send(action.text)
+                    return True
+        return False
 
     def _is_terminal(self, state) -> bool:
         text = state.raw_text.lower()
