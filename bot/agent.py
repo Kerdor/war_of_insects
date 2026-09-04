@@ -179,6 +179,11 @@ class Agent:
             if navigation:
                 return navigation
 
+        action_texts = {action.text.strip().lower() for action in safe}
+
+        if "🔘далее" in action_texts:
+            return [action for action in safe if action.text.strip().lower() == "🔘далее"]
+
         if state.location == "quests":
             navigation = [
                 action for action in safe
@@ -225,7 +230,6 @@ class Agent:
             "🔘сбор отряда",
         }
 
-        action_texts = {action.text.strip().lower() for action in safe}
         battle_count = len(action_texts & battle_actions)
         skill_count = len(action_texts & skill_actions)
         equipment_count = len(action_texts & equipment_actions)
@@ -278,11 +282,15 @@ class Agent:
             if navigation:
                 return navigation
 
-        if len(safe) == 1 and safe[0].text.strip().lower() in {"назад", "🔙назад", "🔙меню"}:
+        navigation_actions = {"назад", "🔙назад", "🔙меню"}
+        if len(safe) == 1 and safe[0].text.strip().lower() in navigation_actions:
             return safe
 
+        if state.location == "unknown" and "🔙назад" in action_texts and len(action_texts) <= 3:
+            return [action for action in safe if action.text.strip().lower() in navigation_actions]
+
         if "назад" in action_texts and len(action_texts) <= 3:
-            return [action for action in safe if action.text.strip().lower() in {"назад", "🔙назад", "🔙меню"}]
+            return [action for action in safe if action.text.strip().lower() in navigation_actions]
 
         return safe
 
