@@ -111,6 +111,14 @@ A separate AI analyst layer is planned on top of the existing Q-learning agent. 
 
 The AI analyst will not hardcode routes or bypass the self-learning architecture.
 
+### Official game knowledge
+
+Official skill documentation is being collected separately from learned observations.
+
+- `data/knowledge/official/skills.md` created;
+- currently contains official descriptions of Strength, Agility, Athletics, Perception, Attack, and Defense;
+- current character levels and temporary equipment/innate bonuses are not treated as permanent skill knowledge.
+
 ### Project structure commit
 
 `4b493c846efdf60201c95302b7d9fea5f4b92f53`
