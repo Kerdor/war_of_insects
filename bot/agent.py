@@ -142,6 +142,94 @@ class Agent:
             if navigation:
                 return navigation
 
+        battle_actions = {
+            "атаковать",
+            "общение",
+            "снаряжение",
+            "отступить",
+            "состояние (вы)",
+            "предметы",
+            "состояние (враг)",
+        }
+        skill_actions = {
+            "🦾сила",
+            "🪶ловкость",
+            "🦿атлетика",
+            "🏹восприятие",
+            "⚔атака",
+            "🛡защита",
+            "💨уклонение",
+            "🗡режущее",
+            "🪓рубящее",
+            "🔨дробящее",
+            "🦯колющее",
+        }
+        equipment_actions = {
+            "💀голова",
+            "🪲грудь",
+            "🪱живот",
+            "🐾лапы",
+            "📥снять всё",
+            "📌шаблоны",
+        }
+        exploration_actions = {
+            "🏜ближайшие территории",
+            "⛰умеренная дальность",
+            "🌋дальние территории",
+            "🔙назад",
+            "🔘сбор отряда",
+        }
+
+        if state.location == "skills":
+            filtered = [
+                action for action in safe
+                if action.text.strip().lower() in skill_actions
+                or action.text.strip().lower() in battle_actions
+            ]
+            if filtered:
+                return filtered
+
+        if state.location == "equipment":
+            filtered = [
+                action for action in safe
+                if action.text.strip().lower() in equipment_actions
+                or action.text.strip().lower() in battle_actions
+            ]
+            if filtered:
+                return filtered
+
+        if state.location == "exploration":
+            filtered = [
+                action for action in safe
+                if action.text.strip().lower() in exploration_actions
+            ]
+            if filtered:
+                return filtered
+
+        if state.location == "battle":
+            filtered = [
+                action for action in safe
+                if action.text.strip().lower() in battle_actions
+            ]
+            if filtered:
+                return filtered
+
+        if state.location == "main":
+            without_pagination = [
+                action for action in safe
+                if action.text.strip().lower() != "🔘далее"
+            ]
+            if without_pagination:
+                return without_pagination
+
+        if state.location == "secondary_menu":
+            navigation = [
+                action for action in safe
+                if action.text.strip().lower() == "🔙меню"
+            ]
+            if navigation:
+                return navigation
+
         return safe
 
     async def _wait_for_change(self, client, state_key: str):
