@@ -1,5 +1,6 @@
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
+from telethon.tl.types import ReplyKeyboardMarkup
 
 from config import API_HASH, API_ID, BOT_USERNAME, AccountConfig
 
@@ -47,3 +48,22 @@ class GameClient:
                 return message
 
         return messages[0]
+
+    async def get_reply_keyboard_message(self):
+        messages = await self.client.get_messages(BOT_USERNAME, limit=20)
+        for message in messages:
+            if isinstance(getattr(message, "reply_markup", None), ReplyKeyboardMarkup):
+                return message
+        return None
+
+    async def get_current_buttons(self, message):
+        buttons = []
+        for row in message.buttons or []:
+            buttons.extend(row)
+
+        reply_message = await self.get_reply_keyboard_message()
+        if reply_message is not None and reply_message.id != message.id:
+            for row in reply_message.buttons or []:
+                buttons.append(row)
+
+        return buttons
