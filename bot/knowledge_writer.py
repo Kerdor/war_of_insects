@@ -54,9 +54,9 @@ class KnowledgeWriter:
                 status=record["status"],
                 account_id=account_id,
                 evidence_lines=self._evidence_lines(record),
-                conditions=str(candidate.get("conditions", "")).strip(),
-                consequences=str(candidate.get("consequences", "")).strip(),
-                exceptions=str(candidate.get("exceptions", "")).strip(),
+                conditions=str(record.get("conditions", candidate.get("conditions", ""))).strip(),
+                consequences=str(record.get("consequences", candidate.get("consequences", ""))).strip(),
+                exceptions=str(record.get("exceptions", candidate.get("exceptions", ""))).strip(),
                 digest=digest,
                 record=record,
             )
@@ -82,6 +82,10 @@ class KnowledgeWriter:
                 "domain": self._slug(candidate.get("domain", "general")) or "general",
                 "type": self._slug(candidate.get("type", "observation")) or "observation",
                 "mechanic_key": self._slug(candidate.get("mechanic_key", "")),
+                "conditions": str(candidate.get("conditions", "")).strip(),
+                "consequences": str(candidate.get("consequences", "")).strip(),
+                "exceptions": str(candidate.get("exceptions", "")).strip(),
+                "related": self._normalize_list(candidate.get("related", [])),
                 "observations": [],
                 "accounts": [],
                 "confidence": 0.0,
@@ -93,6 +97,11 @@ class KnowledgeWriter:
 
         if not record.get("mechanic_key"):
             record["mechanic_key"] = self._slug(candidate.get("mechanic_key", ""))
+        for field in ("conditions", "consequences", "exceptions"):
+            if not record.get(field) and candidate.get(field):
+                record[field] = str(candidate.get(field)).strip()
+        if not record.get("related"):
+            record["related"] = self._normalize_list(candidate.get("related", []))
 
         observation_id = observation_id or hashlib.sha1(
             f"{account_id}|{claim}|{time.time_ns()}".encode("utf-8")
