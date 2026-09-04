@@ -78,11 +78,18 @@ It:
 `bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. Qwen analysis is configured for every completed transition by default (`QWEN_ANALYSIS_INTERVAL=1`) whenever Qwen is enabled.
 
 The analyst receives:
-- before/after normalized state;
+- the actual full Telegram game message before the action;
+- the actual full Telegram game message after the action;
+- visible Telegram buttons before and after the action;
+- before/after normalized state and parsed characteristics;
 - selected action;
 - local reward;
 - recent actions;
 - retrieved official/learned knowledge, including conflicted learned entries for investigation.
+
+The Telegram messages are now explicit first-class fields in the Qwen observation payload: `telegram_message_before`, `telegram_buttons_before`, `telegram_message_after` and `telegram_buttons_after`. Raw message text is no longer truncated to 5000 characters inside `_state_dict()`; the complete `state.raw_text` is passed to the analyst.
+
+The analyst prompt explicitly tells Qwen to treat the actual Telegram game text and buttons as the primary evidence, compare the before/after messages, and use parsed state only as supporting structure.
 
 Qwen returns:
 - structured durable-knowledge candidates;
@@ -102,13 +109,13 @@ Current defaults in `bot/qwen_analyst.py`:
 - `QWEN_MAX_TOKENS=1200`;
 - `QWEN_TIMEOUT=120` seconds.
 
-The analyst now calls Ollama's native `/api/chat` endpoint and does not require `QWEN_API_KEY`. The request uses non-streaming output and disables Qwen thinking for this fast structured-analysis workload. The existing JSON parsing, knowledge writing, bounded learning signal and asynchronous per-account serialization remain unchanged.
+The analyst calls Ollama's native `/api/chat` endpoint and does not require `QWEN_API_KEY`. The request uses non-streaming output, disables Qwen thinking for this fast structured-analysis workload, and requests JSON output.
 
 The local model confirmed by the user is `qwen3:4b` (approximately 2.5 GB installed through Ollama).
 
 This keeps the intended pipeline local:
 
-`Perception → Q-learning action → Telegram → next state → local reward/Q update → local Ollama Qwen3 4B analysis → optional Qwen learning signal → second Q update + knowledge storage`
+`Telegram game message → Perception → Q-learning action → Telegram → next Telegram game message → local reward/Q update → local Ollama Qwen3 4B analysis → optional Qwen learning signal → second Q update + knowledge storage`
 
 No Qwen credentials are required for the local backend.
 
@@ -129,6 +136,37 @@ This makes Qwen an evaluator/teacher rather than a policy: Q-learning still choo
 ### Qwen transition delivery
 
 Every eligible transition creates an asynchronous analysis task. Per-account Qwen calls are serialized with an asyncio lock and are no longer silently discarded merely because a previous Qwen request is still running.
+
+### Qwen raw Telegram message analysis — 2026-09-04
+
+The analyst was adjusted so the Telegram message itself is the central observation rather than merely a derived state representation.
+
+For every analyzed transition Qwen receives:
+
+`BEFORE`
+- complete raw Telegram message text;
+- all visible parsed button labels;
+- normalized location/action/statistics/inventory/events.
+
+`ACTION`
+- the exact action selected by Q-learning;
+- local reward assigned after the resulting state arrives.
+
+`AFTER`
+- complete raw Telegram message text;
+- all visible parsed button labels;
+- normalized location/action/statistics/inventory/events.
+
+It also receives the recent action sequence and retrieved knowledge as context.
+
+The prompt now explicitly instructs Qwen to:
+1. compare the actual before/after Telegram messages;
+2. identify what the game actually reported as changed;
+3. use buttons and parsed fields to understand the message structure;
+4. extract only mechanics supported by the observed evidence;
+5. avoid choosing the next action.
+
+Ollama JSON mode is enabled for the response so the structured analyst result is less dependent on free-form output formatting.
 
 ### Repeated-evidence confirmation
 
@@ -241,7 +279,7 @@ Recommended order:
 3. set `QWEN_ENABLED=true` in the local `.env`;
 4. run with one enabled account;
 5. verify skills/equipment/exploration/battle screens expose only context-relevant actions;
-6. verify the agent no longer jumps from a submenu into `⭐️Задания`, `🏆Турнир`, `🏪Лавка` or similar global actions merely because those buttons are present;
+6. verify the agent no longer jumps from a submenu into `⭐️Задания`, `🏆Турнир`, `🏪Лавка`, `💵Кредиты` or similar global actions merely because those buttons are present;
 7. verify payment/purchase/discard actions are never selected autonomously;
 8. verify battle control screens are recognized or at least filtered to battle actions;
 9. verify every transition prints a non-ambiguous local `Reward` and `Q` line;
