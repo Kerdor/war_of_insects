@@ -55,7 +55,8 @@ war_of_insects/
 - falls back to the newest message when no keyboard is present;
 - added detection of the most recent `ReplyKeyboardMarkup` in recent bot messages;
 - added `get_current_buttons()` to combine buttons from the current message with the persistent reply keyboard;
-- this allows the self-learning agent to keep seeing navigation actions such as the main reply keyboard while it is inside an inline-button menu.
+- added an in-memory `reply_keyboard_message` cache so a previously detected persistent Reply Keyboard remains available after its message leaves the recent-message window;
+- new Reply Keyboard messages refresh the cache automatically.
 
 ### Multi-account behavior
 
@@ -93,11 +94,22 @@ The keyboard is treated as part of the perceived state/action space, so changing
 Telegram can leave a persistent reply keyboard active while a newer bot message displays a separate inline keyboard. The agent therefore treats these as two layers of the actionable UI:
 - the current message supplies its inline/reply buttons;
 - the newest recent bot message containing `ReplyKeyboardMarkup` supplies the persistent navigation buttons;
+- once discovered, the persistent Reply Keyboard is cached in `GameClient` and remains available even when its source message is older than the recent-message window;
 - both are passed into perception as available actions;
 - inline callback actions are clicked on their source message;
 - reply-keyboard actions are sent as normal messages.
 
 This is a perception/input fix only. It does not hardcode a route or force the agent to choose a particular action.
+
+### Planned AI analyst layer
+
+A separate AI analyst layer is planned on top of the existing Q-learning agent. Its role will be observation and knowledge extraction rather than direct control:
+- analyze game messages, buttons, perceived state, selected actions, transitions, and rewards;
+- identify useful game mechanics and consequences that are difficult to infer from raw Q-learning data alone;
+- store durable observations/knowledge for later decisions;
+- provide contextual information to the learning system without replacing autonomous action selection.
+
+The AI analyst will not hardcode routes or bypass the self-learning architecture.
 
 ### Project structure commit
 
