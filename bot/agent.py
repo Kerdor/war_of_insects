@@ -179,6 +179,14 @@ class Agent:
             if navigation:
                 return navigation
 
+        if state.location == "quests":
+            navigation = [
+                action for action in safe
+                if action.text.strip().lower() in {"🔙назад", "🔙меню"}
+            ]
+            if navigation:
+                return navigation
+
         battle_actions = {
             "атаковать",
             "общение",
@@ -255,12 +263,12 @@ class Agent:
                 return filtered
 
         if state.location == "main":
-            without_pagination = [
+            explore = [
                 action for action in safe
-                if action.text.strip().lower() != "🔘далее"
+                if action.text.strip().lower() == "🏜исследовать"
             ]
-            if without_pagination:
-                return without_pagination
+            if explore:
+                return explore
 
         if state.location == "secondary_menu":
             navigation = [
