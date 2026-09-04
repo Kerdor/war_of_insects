@@ -116,7 +116,7 @@ The AI analyst will not hardcode routes or bypass the self-learning architecture
 Official skill documentation is being collected separately from learned observations.
 
 - `data/knowledge/official/skills.md` created;
-- currently contains official descriptions of Strength, Agility, Athletics, Perception, Attack, and Defense;
+- currently contains official descriptions of Strength, Agility, Athletics, Perception, Attack, Defense, Dodge, Cutting, and Slashing;
 - current character levels and temporary equipment/innate bonuses are not treated as permanent skill knowledge.
 
 ### Project structure commit
