@@ -1,49 +1,81 @@
 # PROJECT STATE
 
-## 2026-09-04 — Runtime error fixes, reply-keyboard execution and dev runner
+## 2026-09-04 — Runtime fixes, self-learning loop, development runner and project structure
 
-Fixed runtime errors and the first no-action issue found during multi-account startup/game loop testing.
+### Current structure
 
-### Fixes
+Application code is grouped into the `bot/` package instead of being kept as many Python files in the repository root.
+
+```text
+war_of_insects/
+├── bot/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── learning.py
+│   ├── memory.py
+│   ├── models.py
+│   ├── perception.py
+│   ├── reward.py
+│   ├── stats.py
+│   ├── strategy.py
+│   ├── telegram_client.py
+│   └── transitions.py
+├── config.py
+├── dev_runner.py
+├── main.py
+├── .env.example
+├── .gitignore
+├── requirements.txt
+├── README.md
+└── data/
+```
+
+`main.py`, `config.py`, and `dev_runner.py` remain at the root as entry point, configuration, and development runner.
+
+### Runtime fixes
 
 `learning.py`:
 - fixed unpacking of `TransitionMemory.predict()` result;
-- transition prediction returns `(count, next_state, average_reward)`, and all three values are now unpacked correctly.
+- transition prediction returns `(count, next_state, average_reward)`.
 
 `main.py`:
-- fixed cleanup check from nonexistent `GameClient.is_connected()` to the underlying Telethon client's `is_connected()`.
+- fixed cleanup check to use the underlying Telethon client's `is_connected()`.
 
 `agent.py` / `perception.py`:
-- fixed `Start parameter invalid (caused by StartBotRequest)` caused by Telegram `KeyboardButtonSwitchInline` buttons being treated as normal game actions;
-- SwitchInline buttons are now ignored by perception and skipped by the action click fallback;
-- reply-keyboard game actions are now sent as normal messages through the account client;
-- added concise runtime logging for detected state, available actions, selected action, and failed clicks.
-
-### Development runner
-
-Added `dev_runner.py`:
-- starts `main.py`;
-- runs `git pull` every 5 seconds;
-- compares the current HEAD before and after pull;
-- restarts `main.py` only when a new commit is detected;
-- leaves the running process untouched when pull fails;
-- supports Ctrl+C shutdown;
-- does not modify `.env` or Telegram session files.
+- fixed `Start parameter invalid (caused by StartBotRequest)` from Telegram `KeyboardButtonSwitchInline` buttons;
+- SwitchInline buttons are ignored;
+- reply-keyboard actions are sent as normal messages;
+- runtime logging is enabled for detected state, available actions, selected action, and failed clicks.
 
 ### Multi-account behavior
 
-- Enabled accounts still authorize sequentially.
+- Accounts authorize sequentially.
 - Already authorized sessions skip code entry.
 - Enabled accounts run concurrently after authorization.
-- Account enable flags remain supported through `ACCOUNT_N_ENABLED=true/false`.
+- `ACCOUNT_N_ENABLED=true/false` controls each account.
 
-### Current commits
+### Development runner
 
-- Config: `7d7b6ca139555a6dd6074d8946ff15dce765c4c0`
-- Telegram authorization: `02833f912879a0ed839397d0a9ae66d54fe32af0`
-- Main runtime cleanup fix: `7e66f63fa941b1c5fad937431c6fa7c60585a342`
-- Learning transition unpack fix: `244e0ab7c7ee816fdd73d88522dfa6ceaa8a6164`
-- Agent SwitchInline handling: `9fdc33b8d1c5223a736ac703c7231597366c41f5`
-- Perception SwitchInline filtering: `f52e13d661f5d4840efeafd4b6f4f170a128cc7f`
-- Reply-keyboard action execution: `62c0376f91961d48c4f83745fd8a46c8ce4da2a0`
-- Development runner: `f33f253612867a4d20bb25de892317b6af475ad3`
+`dev_runner.py`:
+- starts `main.py`;
+- runs `git pull` every 5 seconds;
+- detects a new `HEAD` commit;
+- restarts `main.py` when code changes;
+- keeps the runner alive across restarts;
+- does not modify `.env` or Telegram session files.
+
+### Learning architecture
+
+The current agent uses:
+- perception/state normalization;
+- Q-learning;
+- transition memory;
+- strategy memory;
+- experience memory;
+- reward calculation;
+- per-account runtime context;
+- learning statistics.
+
+### Project structure commit
+
+`4b493c846efdf60201c95302b7d9fea5f4b92f53`
