@@ -135,6 +135,22 @@ The same change also hardens `_click()` and `_flatten_buttons()` to accept both 
 Commit:
 - `0425b69` — fix secondary-menu navigation priority and flat button clicking.
 
+### Deterministic navigation policy — 2026-09-05
+
+The runtime showed that the agent had been allowed to select arbitrary actions in navigation states whenever the expected navigation button was missing from the parsed action list. This allowed `Далее` or other unrelated buttons to create loops even though Q-learning had no meaningful gameplay decision to make.
+
+`bot/agent.py` now treats navigation states as strict policies:
+- `tutorial` may select `🔘Далее`;
+- `secondary_menu` may select only `🔙Меню`;
+- `help` may select only `🔙Назад`;
+- `quests` may select only `🔙Назад` or `🔙Меню`;
+- these states return no action when the required navigation button is absent instead of selecting an unrelated button.
+
+The generic `🔘Далее` fallback was removed. This prevents Q-learning from being used to make meaningless navigation decisions and keeps it focused on actual gameplay choices.
+
+Commit:
+- `2c89268` — make navigation states deterministic instead of exploratory.
+
 ### Runtime connection issue — 2026-09-04
 
 A local run with `C:\Python314\python.exe` did not reach the `Connected: auth/kerdor` log line. Telethon repeatedly reported:
@@ -164,4 +180,5 @@ Commits:
 - `20ea10e` — penalize stagnation and ignore unchanged messages;
 - `a629829` — fix Telethon `MessageButton` keyboard handling;
 - `950ebcc` — fix flat `MessageButton` handling in Perception;
-- `0425b69` — fix secondary-menu navigation priority and flat button clicking.
+- `0425b69` — fix secondary-menu navigation priority and flat button clicking;
+- `2c89268` — make navigation states deterministic instead of exploratory.
