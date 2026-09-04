@@ -16,19 +16,9 @@ war_of_insects/
 ├── data/
 │   └── knowledge/
 │       ├── official/
-│       │   ├── README.md
-│       │   ├── commands.md
-│       │   ├── basics/
-│       │   ├── combat/
-│       │   ├── exploration/
-│       │   ├── items/
-│       │   ├── crafting/
-│       │   ├── clans/
-│       │   ├── tournaments/
-│       │   ├── squad/
-│       │   └── source pages (*.md)
 │       └── learned/
 ├── config.py
+├── self_check.py
 ├── dev_runner.py
 └── main.py
 ```
@@ -62,132 +52,124 @@ Q-learning remains responsible for autonomous action selection. The Qwen analyst
 Knowledge is intentionally divided into:
 
 - `data/knowledge/official/` — trusted/reference information from the official game documentation and tutorial;
-- `data/knowledge/learned/` — future observations, hypotheses, discovered mechanics, action consequences and other experience-derived information.
+- `data/knowledge/learned/` — observations, hypotheses, discovered mechanics, action consequences and other experience-derived information.
 
-Official source pages are retained as archival/context documents. The normalized layer is a retrieval layer, not a summary layer: it must preserve the useful detail from the official source while splitting large pages into focused thematic documents.
+Official source pages are retained as archival/context documents. The normalized layer is a retrieval layer, not a summary layer: it must preserve useful detail while splitting large pages into focused thematic documents.
 
-### Qwen-friendly official knowledge structure — 2026-09-04
+### Retrieval layer
 
-The entire normalized topic layer has been expanded so that topic files preserve substantive rules, conditions, effects, requirements, restrictions, exceptions and operational commands instead of short summaries.
+`bot/knowledge_retrieval.py` provides dependency-free lexical retrieval over official and learned Markdown.
 
-Index-oriented files remain intentionally concise:
-- `official/README.md` — map of the knowledge base;
-- `official/commands.md` — command-oriented lookup;
-- `combat/damage.md` — combat-damage navigation.
+It:
+- recursively loads both knowledge trees;
+- preserves source, domain, status, keywords and related metadata;
+- splits documents by headings and bounded chunks;
+- ranks by query coverage, density, metadata matches, exact phrase matches and source trust;
+- gives official knowledge higher trust;
+- supports domain/source filtering;
+- excludes `conflicted` learned documents from normal retrieval;
+- can explicitly include conflicted documents for analyst investigation;
+- labels conflicted context as `LEARNED-CONFLICT`;
+- builds bounded Qwen context and explicitly states source precedence.
 
-### Retrieval layer — 2026-09-04
+### Qwen analyst layer
 
-Added `bot/knowledge_retrieval.py`.
+`bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. Every `QWEN_ANALYSIS_INTERVAL` completed transitions, an analysis task is scheduled without blocking the gameplay loop.
 
-The retriever is dependency-free and currently lexical so it works offline and does not require an embedding service. It:
-- recursively loads Markdown from `data/knowledge/official/` and `data/knowledge/learned/`;
-- keeps source, domain, status, keywords and related-document metadata;
-- splits documents by Markdown headings and then into bounded chunks while preserving section context;
-- ranks chunks by query-term coverage, term density, metadata matches, exact phrase matches and source trust;
-- gives official knowledge a higher trust bonus than learned observations;
-- supports filtering by `domain` and `source`;
-- excludes `conflicted` learned documents from normal retrieval by default;
-- can explicitly include conflicted learned knowledge for analyst investigation;
-- labels conflicted context as `LEARNED-CONFLICT` and lowers its retrieval trust;
-- builds bounded context suitable for sending to Qwen;
-- explicitly tells Qwen that learned observations are hypotheses and must not override explicit official rules or unresolved conflicts.
+The analyst receives:
+- before/after normalized state;
+- selected action;
+- reward;
+- recent actions;
+- retrieved official/learned knowledge, including conflicted learned entries for investigation.
 
-The public retrieval interface is:
-- `KnowledgeRetriever.search(...)` — ranked `KnowledgeHit` objects;
-- `KnowledgeRetriever.build_context(...)` — bounded source-labelled context;
-- `KnowledgeRetriever.build_qwen_prompt_context(...)` — Qwen-ready context with source precedence and conflict instructions.
+Qwen returns structured candidates only. It does not select or execute gameplay actions.
 
-The design intentionally avoids hard-coding game routes. Retrieval supplies knowledge to the analyst; Q-learning remains responsible for choosing actions.
-
-### Qwen analyst layer — 2026-09-04
-
-Added `bot/qwen_analyst.py` and `bot/knowledge_writer.py` and connected them to `Agent.step()`.
-
-The runtime flow is now:
-1. Perception parses the current Telegram observation into `GameState`.
-2. Q-learning selects and executes the action.
-3. The next state and reward are recorded in the existing learning systems.
-4. Every `QWEN_ANALYSIS_INTERVAL` completed transitions, the Qwen analyst is scheduled asynchronously so gameplay is not blocked by the network call.
-5. The analyst receives the before/after normalized states, selected action, reward, recent actions and retrieved official/learned context.
-6. Qwen returns structured knowledge candidates only; it is explicitly forbidden from selecting or executing actions.
-7. `KnowledgeWriter` persists sufficiently confident candidates under `data/knowledge/learned/<domain>/` as Markdown with frontmatter and evidence.
-
-### Repeated-evidence confirmation — 2026-09-04
-
-`KnowledgeWriter` maintains a persistent evidence ledger at `data/knowledge/learned/.evidence.json`.
-
-Each learned claim is aggregated by deterministic claim hash. Every observation stores:
-- stable observation ID derived from account + before/after state + action + reward;
-- account ID;
-- timestamp;
-- analyst confidence;
-- evidence supplied by Qwen.
-
-Promotion rules are deliberately conservative:
-- `< 0.55` confidence: discarded;
-- otherwise, a single observation is `hypothesis`;
-- at least 2 observations with average confidence `>= 0.80`: `candidate`;
-- at least 3 observations from at least 2 independent accounts with confidence `>= 0.70`: `confirmed`.
-
-Qwen itself cannot promote knowledge. Only repeated runtime evidence can do so. Confirmed knowledge remains under `learned/`; it does not become official and cannot overwrite official documentation.
-
-The generated Markdown exposes support counts, independent-account counts and the accumulated evidence.
-
-### Contradiction handling — 2026-09-04
-
-The learned-knowledge layer now distinguishes repeated support from contradictory observations.
-
-Qwen candidates may provide:
-- `mechanic_key` — a stable topic identifier for the underlying mechanic rather than the wording of a claim;
+Candidate metadata includes:
+- `mechanic_key` — stable identifier for the underlying mechanic;
 - `relation` — `new`, `supports`, `contradicts` or `unclear`;
-- `conflicts_with` — exact existing learned claim text when Qwen identifies a material contradiction.
+- `conflicts_with` — exact learned claim text when a material contradiction is identified.
 
-Conflict handling is conservative:
-- a contradiction is accepted only when Qwen identifies the same mechanic key and an exact existing claim target;
-- different conditions, exceptions or contexts are not automatically considered contradictions;
-- both sides remain stored as evidence;
-- both conflicting claims become `conflicted` and cannot be promoted to `candidate` or `confirmed` while the conflict remains active;
-- no learned claim is deleted or silently merged;
-- conflicted Markdown contains an explicit conflict section and conflict references;
-- the target claim's persisted Markdown is updated immediately when a conflict is detected.
+### Repeated-evidence confirmation
 
-The retriever excludes conflicted learned knowledge from normal agent context, preventing unresolved observations from influencing ordinary knowledge use. Qwen analysis can explicitly include those entries so it can recognize and investigate the unresolved disagreement.
+`KnowledgeWriter` maintains `data/knowledge/learned/.evidence.json`.
 
-### Qwen configuration
+Each claim stores stable observation IDs, account IDs, timestamps, analyst confidence and evidence. Promotion remains conservative:
+- `< 0.55` — discarded;
+- single observation — `hypothesis`;
+- at least 2 observations and average confidence `>= 0.80` — `candidate`;
+- at least 3 observations, at least 2 independent accounts and confidence `>= 0.70` — `confirmed`.
 
-`.env.example` documents:
-- `QWEN_ENABLED=false` — opt-in switch;
-- `QWEN_API_KEY`;
-- `QWEN_BASE_URL` (OpenAI-compatible endpoint, default DashScope compatible-mode endpoint);
-- `QWEN_MODEL`;
-- `QWEN_ANALYSIS_INTERVAL=10`;
-- `QWEN_MAX_TOKENS=1200`;
-- `QWEN_TIMEOUT=30`.
+Qwen cannot promote knowledge directly.
 
-The analyst uses Python's standard-library HTTP client, so no additional package is required.
+### Contradiction handling
 
-### Runtime correction in Qwen integration — 2026-09-04
+The writer accepts a contradiction only when the candidate identifies the same `mechanic_key` and an exact existing learned claim target.
 
-Fixed the Qwen analyst's retrieval call to use the current `build_qwen_prompt_context()` interface. The analyst now explicitly requests conflicted knowledge for investigation instead of passing the obsolete `include_learned` argument.
+When detected:
+- both claims remain stored;
+- both become `conflicted`;
+- both retain their evidence;
+- neither can be promoted while the conflict is active;
+- the conflicting claim references are persisted;
+- the target Markdown is updated immediately;
+- nothing is silently deleted or merged.
+
+Different conditions or exceptions are not automatically treated as contradictions. The analyst is instructed to preserve uncertainty when the evidence does not prove incompatibility.
+
+### Qwen integration correction
+
+The Qwen analyst now uses the current retrieval API correctly and explicitly requests conflicted knowledge so it can compare new observations against unresolved claims. Normal agent retrieval still excludes those claims.
+
+### Local preflight
+
+Added `self_check.py` for a safe local verification before Telegram execution. It checks:
+- imports of the core agent modules;
+- loading of the knowledge base;
+- retrieval returning context;
+- contradiction persistence and conflict status;
+- Qwen JSON parsing.
+
+The preflight does not connect to Telegram and does not call the Qwen API.
+
+### Static launch audit — 2026-09-04
+
+The repository was audited across the current agent, Q-learning, Telegram client, configuration, Qwen analyst, retrieval and knowledge writer integration points.
+
+Critical integration issue found and corrected:
+- `QwenAnalyst` was calling `build_qwen_prompt_context()` with the obsolete `include_learned` argument. This would fail when Qwen analysis was actually triggered. The call now matches the current retrieval interface.
+
+Additional consistency correction:
+- conflicted knowledge is now explicitly labelled `LEARNED-CONFLICT` when included for analyst investigation, matching the documented architecture.
+
+The local runtime itself has not yet been executed in this environment because the available GitHub connection can edit/read the repository but the execution environment cannot resolve GitHub for cloning. `self_check.py` is therefore prepared for the user's local machine, but its runtime result is not claimed here.
+
+### Current launch boundary
+
+The project is now at the point where the next step should be an actual local run rather than another large architectural redesign.
+
+Recommended order:
+1. `pip install -r requirements.txt`
+2. copy `.env.example` to `.env` and fill credentials;
+3. run `python self_check.py`;
+4. if preflight passes, run `python main.py` with one enabled account first;
+5. verify real state → action → next state → reward → Q-learning flow;
+6. enable Qwen and verify analyst calls/learned output;
+7. only then enable additional accounts and long autonomous runs.
 
 ### Current learning boundary
 
-Q-learning still owns action selection. The Qwen analyst is an asynchronous observation/knowledge-extraction subsystem only. Retrieval supplies context; analyst output becomes learned hypotheses; repeated evidence can promote them to confirmed learned knowledge without changing the action policy directly. Unresolved conflicts are kept out of normal learned context.
+Q-learning still owns action selection. Qwen is an asynchronous observation/knowledge-extraction subsystem. Retrieval supplies context; writer persists learned hypotheses and evidence. Confirmed learned knowledge does not become official and does not directly override Q-learning.
 
-### Retrieval roadmap
+### Roadmap after first real run
 
-Future improvements can add semantic claim deduplication, automatic detection of contradictions without relying solely on an LLM relation label, richer cross-account evidence aggregation and optional semantic/embedding retrieval. These are deliberately separate from the current conservative conflict mechanism.
-
-### Retrieval document standard
-
-Every substantive normalized document should:
-- preserve meaningful source detail rather than summarizing it away;
-- split only along meaningful retrieval boundaries;
-- keep conditions, effects, requirements, restrictions, exceptions and examples;
-- use lightweight frontmatter with stable `id`, `type`, `domain`, `source`, `keywords` and `related` fields;
-- use index files only for navigation;
-- avoid replacing authoritative source details with guesses when the source is ambiguous or internally inconsistent.
+The next improvements should be driven by observed runtime behavior. Likely areas are:
+- improving state representation where real Telegram states are ambiguous;
+- tuning reward signals from real outcomes;
+- semantic deduplication of paraphrased claims;
+- stronger automatic contradiction detection independent of LLM labels;
+- eventually allowing validated learned knowledge to influence action scoring without bypassing Q-learning.
 
 ### Design decision
 
-Do not delete the original source pages. They are the canonical archival layer. The normalized files are the retrieval layer and should contain the same meaningful detail, only reorganized for targeted retrieval. This gives Qwen both fast narrow retrieval and broader source context when necessary.
+Do not delete original source pages. They remain the canonical archival layer. Normalized files are the retrieval layer and should preserve meaningful source detail in targeted documents.
