@@ -25,7 +25,7 @@ class Agent:
         self.account_state = {}
 
     async def step(self, client, message, account_id):
-        buttons = self._flatten_buttons(message)
+        buttons = await client.get_current_buttons(message)
         state = self.perception.parse(message.text or "", buttons)
         state_key = self.perception.state_key(state)
         actions = [action.key or action.text for action in state.available_actions]
@@ -75,7 +75,8 @@ class Agent:
         if next_message is None:
             return selected.text
 
-        next_state = self.perception.parse(next_message.text or "", self._flatten_buttons(next_message))
+        next_buttons = await client.get_current_buttons(next_message)
+        next_state = self.perception.parse(next_message.text or "", next_buttons)
         next_key = self.perception.state_key(next_state)
         next_actions = [action.key or action.text for action in next_state.available_actions]
         reward = self.reward.calculate(state, next_state)
@@ -103,7 +104,8 @@ class Agent:
             message = await client.get_latest()
             if message is None:
                 continue
-            state = self.perception.parse(message.text or "", self._flatten_buttons(message))
+            buttons = await client.get_current_buttons(message)
+            state = self.perception.parse(message.text or "", buttons)
             if self.perception.state_key(state) != state_key:
                 return message
         return await client.get_latest()
@@ -126,7 +128,12 @@ class Agent:
                 if getattr(button, "text", "") == action.text:
                     await client.send(action.text)
                     return True
-        return False
+
+        try:
+            await client.send(action.text)
+            return True
+        except Exception:
+            return False
 
     def _is_terminal(self, state) -> bool:
         text = state.raw_text.lower()
