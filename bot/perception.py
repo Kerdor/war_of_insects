@@ -359,6 +359,8 @@ class Perception:
     def _parse_buttons(self, buttons) -> list[Action]:
         result = []
         for row in buttons:
+            if not isinstance(row, (list, tuple)):
+                row = [row]
             for button in row:
                 text = getattr(button, "text", "") or ""
                 if not text:
