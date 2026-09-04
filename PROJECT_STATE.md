@@ -102,10 +102,13 @@ The local runtime failed repeatedly with:
 
 `'MessageButton' object is not iterable`
 
-The cause was `GameClient.get_current_buttons()` assuming every item in `message.buttons` was a row/list. Telethon can expose a flat `MessageButton` object in this path. The method now accepts both nested rows and individual `MessageButton` objects, preserving the existing button-selection logic.
+The first fix was applied in `bot/telegram_client.py`, but the same error remained because `bot/perception.py` also assumed every item in the supplied button collection was an iterable row. The failure occurred in `_parse_buttons()` when it attempted to iterate over an individual `MessageButton`.
 
-Commit:
-- `a629829` — fix MessageButton keyboard handling.
+`bot/perception.py` now accepts both nested button rows and flat individual `MessageButton` objects. The existing action parsing and filtering logic is unchanged.
+
+Commits:
+- `a629829` — fix Telethon `MessageButton` handling in `GameClient`;
+- `950ebcc` — fix flat `MessageButton` handling in `Perception`.
 
 ### Runtime connection issue — 2026-09-04
 
@@ -134,4 +137,5 @@ Commits:
 - `4f62a64` — fix KnowledgeWriter API call;
 - `5f94d53` — add stagnation penalty to reward learning;
 - `20ea10e` — penalize stagnation and ignore unchanged messages;
-- `a629829` — fix Telethon `MessageButton` keyboard handling.
+- `a629829` — fix Telethon `MessageButton` keyboard handling;
+- `950ebcc` — fix flat `MessageButton` handling in Perception.
