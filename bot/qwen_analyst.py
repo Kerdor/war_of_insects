@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 import urllib.error
@@ -58,6 +59,13 @@ class QwenAnalyst:
             return
         async with lock:
             try:
+                observation_id = self._observation_id(
+                    account_id,
+                    state_before,
+                    action,
+                    state_after,
+                    reward,
+                )
                 result = await asyncio.to_thread(
                     self._analyze_sync,
                     account_id,
@@ -68,9 +76,9 @@ class QwenAnalyst:
                     recent_actions,
                 )
                 if result:
-                    written = self.writer.write_candidates(result, account_id)
+                    written = self.writer.write_candidates(result, account_id, observation_id)
                     if written:
-                        print(f"[{account_id}] Qwen analyst: wrote {len(written)} knowledge candidate(s)")
+                        print(f"[{account_id}] Qwen analyst: wrote/updated {len(written)} knowledge candidate(s)")
             except Exception as exc:
                 print(f"[{account_id}] Qwen analyst error: {exc}")
 
@@ -153,7 +161,7 @@ class QwenAnalyst:
             "- Produce at most 5 candidates.\n"
             "- Confidence must reflect evidence, not plausibility.\n"
             "- A single transition normally supports a hypothesis, not a confirmed rule.\n"
-            "- Never mark a candidate as confirmed. The writer will downgrade it if necessary.\n"
+            "- Never mark a candidate as confirmed. The writer confirms only after repeated independent evidence.\n"
             "- Official source text is authoritative; learned text is only prior observation.\n"
             "- Do not copy large source passages.\n"
             "- If there is not enough evidence for durable knowledge, return {\"candidates\":[]}.\n\n"
@@ -183,6 +191,18 @@ class QwenAnalyst:
                 return []
         candidates = data.get("candidates", []) if isinstance(data, dict) else []
         return candidates if isinstance(candidates, list) else []
+
+    @staticmethod
+    def _observation_id(account_id, state_before, action, state_after, reward) -> str:
+        payload = {
+            "account_id": account_id,
+            "state_before": state_before.raw_text,
+            "action": action,
+            "state_after": state_after.raw_text,
+            "reward": reward,
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        return hashlib.sha1(encoded).hexdigest()[:20]
 
     @staticmethod
     def _state_dict(state) -> dict[str, Any]:
