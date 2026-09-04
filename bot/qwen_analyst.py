@@ -97,6 +97,10 @@ class QwenAnalyst:
 
         payload = {
             "account_id": account_id,
+            "telegram_message_before": state_before.raw_text,
+            "telegram_buttons_before": [action.text for action in state_before.available_actions],
+            "telegram_message_after": state_after.raw_text,
+            "telegram_buttons_after": [action.text for action in state_after.available_actions],
             "transition": {
                 "action": action,
                 "reward": reward,
@@ -118,6 +122,8 @@ class QwenAnalyst:
                     "role": "system",
                     "content": (
                         "You are a game-mechanics analyst for a reinforcement-learning agent. "
+                        "The Telegram messages are the primary observation source. "
+                        "Read the actual game text and buttons before and after the action. "
                         "Do not choose actions, do not give commands to execute, and do not invent rules. "
                         "Evaluate only the observed transition and extract durable knowledge supported by evidence."
                     ),
@@ -126,6 +132,7 @@ class QwenAnalyst:
             ],
             "stream": False,
             "think": False,
+            "format": "json",
             "options": {
                 "temperature": 0.1,
                 "num_predict": self.max_tokens,
@@ -153,13 +160,19 @@ class QwenAnalyst:
 
     def _build_prompt(self, payload: dict[str, Any]) -> str:
         return (
-            "Analyze exactly one gameplay transition. Return JSON only, with this schema:\n"
+            "Analyze exactly one gameplay transition using the actual Telegram game messages as the primary evidence. Return JSON only, with this schema:\n"
             "{\"learning_signal\":0.0,\"candidates\":[{\"type\":\"mechanic|action_consequence|prerequisite|exception|hypothesis\","
             "\"claim\":\"...\",\"mechanic_key\":\"stable_machine_readable_topic\","
             "\"relation\":\"new|supports|contradicts|unclear\",\"conflicts_with\":[\"claim text\"],"
             "\"domain\":\"...\",\"confidence\":0.0,\"status\":\"hypothesis|candidate\","
             "\"conditions\":\"...\",\"consequences\":\"...\",\"exceptions\":\"...\","
             "\"evidence\":[\"...\"],\"related\":[\"...\"]}]}\n\n"
+            "Analysis priority:\n"
+            "1. Compare telegram_message_before with telegram_message_after.\n"
+            "2. Use the exact game text and visible buttons to determine what actually changed.\n"
+            "3. Use parsed state fields as supporting structure, not as a replacement for the Telegram text.\n"
+            "4. Treat the selected action and reward as context for the observed outcome.\n"
+            "5. Use retrieved knowledge only as prior context; never override direct observed evidence with an unsupported rule.\n\n"
             "Rules for learning_signal:\n"
             "- It evaluates the quality of the observed action outcome, not which action should be selected.\n"
             "- Use a small numeric signal from -5.0 to +5.0.\n"
@@ -238,12 +251,12 @@ class QwenAnalyst:
     @staticmethod
     def _state_dict(state) -> dict[str, Any]:
         return {
-            "raw_text": state.raw_text[-5000:],
+            "raw_text": state.raw_text,
             "location": state.location,
             "current_action": state.current_action,
             "available_actions": [action.text for action in state.available_actions],
             "self_data": state.self_data,
             "enemy_data": state.enemy_data,
             "inventory": state.inventory,
-            "events": state.events[-10:],
+            "events": state.events,
         }
