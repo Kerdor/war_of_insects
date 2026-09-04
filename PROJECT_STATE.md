@@ -75,7 +75,7 @@ It:
 
 ### Qwen analyst layer
 
-`bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. Every `QWEN_ANALYSIS_INTERVAL` completed transitions, an analysis task is scheduled without blocking the gameplay loop.
+`bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. It now analyzes **every completed transition by default** (`QWEN_ANALYSIS_INTERVAL=1`) whenever Qwen is enabled and an API key is configured. Analysis runs in a background task and does not block the gameplay loop.
 
 The analyst receives:
 - before/after normalized state;
@@ -85,6 +85,11 @@ The analyst receives:
 - retrieved official/learned knowledge, including conflicted learned entries for investigation.
 
 Qwen returns structured candidates only. It does not select or execute gameplay actions.
+
+Important runtime behavior:
+- Qwen does not need a separate local process when using the configured OpenAI-compatible DashScope endpoint; the agent calls the remote API directly.
+- If `QWEN_ENABLED` is false or `QWEN_API_KEY` is empty, gameplay continues normally and Qwen analysis is simply skipped.
+- Therefore the current bot can run without Qwen, but it will not receive Qwen-derived knowledge until the API is enabled and configured.
 
 Candidate metadata includes:
 - `mechanic_key` — stable identifier for the underlying mechanic;
@@ -196,9 +201,21 @@ Fix applied in `Agent._selectable_actions()`:
 
 The Q-learning algorithm itself was not modified. This layer only prevents persistent global buttons from contaminating the action set for a more specific current context.
 
+### Qwen every-transition activation — 2026-09-04
+
+The runtime Q-learning file showed many visits but almost all learned Q-values remained `0.0`. The current `RewardEngine` and `QLearning.update()` path confirms that Q-values only change when the calculated reward or future Q-value is non-zero. Qwen was previously configured to analyze only every 10th completed transition.
+
+Change applied:
+- `QWEN_ANALYSIS_INTERVAL` default changed from `10` to `1`;
+- when Qwen is enabled, every completed transition now schedules an asynchronous analyst call;
+- no gameplay action-selection authority was given to Qwen;
+- Qwen remains a learning/knowledge analysis layer, while Q-learning remains the action selector.
+
+This does **not** require a separate local Qwen process. The existing analyst uses the configured OpenAI-compatible DashScope API. Without `QWEN_ENABLED=true` and a valid `QWEN_API_KEY`, the new every-transition path remains inactive by design.
+
 ### Current launch boundary
 
-The next local run should verify the context-aware action filtering.
+The next local run should verify the context-aware action filtering and, when credentials are configured, the every-transition Qwen analyst.
 
 Recommended order:
 1. let `dev_runner.py` pull the latest commit and restart automatically;
@@ -208,8 +225,9 @@ Recommended order:
 5. verify payment/purchase/discard actions are never selected autonomously;
 6. verify battle control screens are recognized or at least filtered to battle actions;
 7. verify real gameplay state → action → next state → reward → Q-learning flow;
-8. enable Qwen and verify analyst calls/learned output;
-9. only then enable additional accounts and long autonomous runs.
+8. if Qwen credentials are available, set `QWEN_ENABLED=true` and verify one analyst request per completed transition and learned output;
+9. inspect whether rewards are non-zero and whether Q-values begin moving away from `0.0`;
+10. only then enable additional accounts and long autonomous runs.
 
 ### Current learning boundary
 
