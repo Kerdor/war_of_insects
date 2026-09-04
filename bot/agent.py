@@ -89,16 +89,20 @@ class Agent:
         self.transitions.record(state_key, selected_key, next_key, reward)
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
         self.stats.record_step(account_id, reward)
+        print(f"[{account_id}] Reward: {reward:+.2f} | Q: {self.learning.get(state_key, selected_key):+.3f}")
 
         if self.analyst.should_analyze(account_id):
             asyncio.create_task(
-                self.analyst.analyze_transition(
+                self._process_qwen_learning(
                     account_id,
                     state,
                     selected_key,
                     next_state,
                     reward,
                     list(context["recent_actions"]),
+                    state_key,
+                    next_key,
+                    next_actions,
                 )
             )
 
@@ -113,6 +117,39 @@ class Agent:
             context["epsilon"] = min(0.50, context["epsilon"] + 0.10) if outcome == "defeat" else max(self.epsilon, context["epsilon"] - 0.05)
 
         return selected.text
+
+    async def _process_qwen_learning(
+        self,
+        account_id,
+        state,
+        selected_key,
+        next_state,
+        reward,
+        recent_actions,
+        state_key,
+        next_key,
+        next_actions,
+    ):
+        result = await self.analyst.analyze_transition(
+            account_id,
+            state,
+            selected_key,
+            next_state,
+            reward,
+            recent_actions,
+        )
+        learning_signal = result.get("learning_signal", 0.0)
+        if learning_signal == 0.0:
+            return
+        adjusted_reward = reward + learning_signal
+        self.learning.update(
+            state_key,
+            selected_key,
+            adjusted_reward,
+            next_key,
+            next_actions,
+        )
+        print(f"[{account_id}] Qwen-adjusted reward: {adjusted_reward:+.2f} | Q: {self.learning.get(state_key, selected_key):+.3f}")
 
     def _selectable_actions(self, state):
         dangerous_markers = (
