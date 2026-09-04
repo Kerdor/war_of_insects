@@ -65,7 +65,7 @@ Commit:
 
 ### Secondary-menu navigation safety — 2026-09-04
 
-Runtime logs showed the game's secondary menu was classified as `unknown` even when its buttons were clearly identifiable, for example `🔙Меню`, `🏕Тайник`, `📦Доставка`, `📝Инсектарий`, `🏆Турнир`, `💵Кредиты`, bonus buttons, `🏪Лавка` and `🕷Рефералы`.
+Runtime logs showed the game's secondary menu was classified as `unknown` even when its buttons were clearly identifiable, for example `🔙Меню`, `🏕Тайник`, `📦Доставка`, `📝Инсектарий`, `🏆Турнир`, `💵Кредиты`, `🏪Лавка` and `🕷Рефералы`.
 
 `bot/perception.py` detects this screen as `secondary_menu` when `🔙Меню` is present together with one of the known secondary-menu entries.
 
@@ -86,25 +86,13 @@ The change is limited to action filtering; Q-learning remains the action-selecti
 
 Runtime behavior showed that the agent could get trapped on a submenu/secondary-menu state. Two changes were made:
 
-- `bot/reward.py` now accepts an optional `stagnation_steps` value. When the agent remains in the same location across repeated transitions, the reward is reduced by `0.10` per repeated step, capped at `-0.50`. This makes useless state loops increasingly unattractive to Q-learning without changing the positive rewards for experience, levels, victories or loot.
-- `bot/agent.py` now passes the repeated-state count into the reward calculation.
-- `bot/agent.py` no longer treats an unchanged/stale Telegram message as a completed transition after the 5-second polling window. `_wait_for_change()` returns `None` instead, so the agent does not learn a fake zero-reward transition from an old message.
-
-The existing `secondary_menu` action filter still restricts that state to `🔙Меню`. The goal is for Q-learning to learn that staying in a navigation-only state is bad and returning to the main menu is the useful transition.
-
-Commits:
-- `5f94d53` — add stagnation penalty to reward learning;
-- `20ea10e` — penalize stagnation and ignore unchanged messages.
+- `bot/reward.py` now accepts an optional `stagnation_steps` value. When the agent remains in the same location across repeated transitions, the reward is reduced by `0.10` per repeated step, capped at `-0.50`.
+- `bot/agent.py` passes the repeated-state count into the reward calculation.
+- `bot/agent.py` no longer treats an unchanged/stale Telegram message as a completed transition after the 5-second polling window.
 
 ### Telegram keyboard compatibility fix — 2026-09-05
 
-The local runtime failed repeatedly with:
-
-`'MessageButton' object is not iterable`
-
-The first fix was applied in `bot/telegram_client.py`, but the same error remained because `bot/perception.py` also assumed every item in the supplied button collection was an iterable row. The failure occurred in `_parse_buttons()` when it attempted to iterate over an individual `MessageButton`.
-
-`bot/perception.py` now accepts both nested button rows and flat individual `MessageButton` objects. The existing action parsing and filtering logic is unchanged.
+`bot/telegram_client.py` and `bot/perception.py` now accept both nested button rows and flat Telethon `MessageButton` objects.
 
 Commits:
 - `a629829` — fix Telethon `MessageButton` handling in `GameClient`;
@@ -112,58 +100,38 @@ Commits:
 
 ### Secondary-menu `Далее` priority bug — 2026-09-05
 
-The next runtime showed an actual navigation-policy bug:
-
-```text
-State: secondary_menu | Actions: 🔘Далее
-Selected: 🔘Далее
-State: help | Actions: 🔙Назад
-Selected: 🔙Назад
-State: secondary_menu | Actions: 🔘Далее
-```
-
-`_selectable_actions()` had a global `🔘Далее` rule placed before the `secondary_menu` rule. Therefore, even when the secondary menu contained its real menu buttons and `🔙Меню`, the generic `Далее` rule overrode the dedicated secondary-menu navigation policy. This produced a loop through `secondary_menu -> help -> secondary_menu` instead of returning to the main game menu.
-
-The fix moves `secondary_menu` and `help` handling before the generic `🔘Далее` rule:
-- `secondary_menu` now selects only `🔙Меню`;
-- `help` now selects only `🔙Назад`;
-- `tutorial` retains priority for `🔘Далее`;
-- the generic `🔘Далее` fallback is used only after these state-specific rules.
-
-The same change also hardens `_click()` and `_flatten_buttons()` to accept both Telethon button-row structures and flat `MessageButton` objects.
+A global `🔘Далее` rule previously overrode the dedicated `secondary_menu` policy and caused `secondary_menu -> help -> secondary_menu` loops. The fix restricts `secondary_menu` to `🔙Меню`, `help` to `🔙Назад`, and `tutorial` to `🔘Далее`.
 
 Commit:
 - `0425b69` — fix secondary-menu navigation priority and flat button clicking.
 
 ### Deterministic navigation policy — 2026-09-05
 
-The runtime showed that the agent had been allowed to select arbitrary actions in navigation states whenever the expected navigation button was missing from the parsed action list. This allowed `Далее` or other unrelated buttons to create loops even though Q-learning had no meaningful gameplay decision to make.
-
-`bot/agent.py` now treats navigation states as strict policies:
+Navigation states are treated as strict policies:
 - `tutorial` may select `🔘Далее`;
 - `secondary_menu` may select only `🔙Меню`;
 - `help` may select only `🔙Назад`;
-- `quests` may select only `🔙Назад` or `🔙Меню`;
-- these states return no action when the required navigation button is absent instead of selecting an unrelated button.
-
-The generic `🔘Далее` fallback was removed. This prevents Q-learning from being used to make meaningless navigation decisions and keeps it focused on actual gameplay choices.
+- `quests` may select only `🔙Назад`/`🔙Меню` unless recognizable main-menu buttons are present.
 
 Commit:
 - `2c89268` — make navigation states deterministic instead of exploratory.
 
 ### Main/quests keyboard misclassification — 2026-09-05
 
-The next runtime showed:
-
-```text
-State: secondary_menu | Actions: 🔙Меню
-Selected: 🔙Меню
-No safe actions detected | State: quests | Buttons: 9
-```
-
-The cause is that the main keyboard contains `⭐️Задания`, and `Perception._detect_location()` checked the quests marker before checking the main keyboard. This could classify the normal main menu as `quests`. Since the strict quests policy allows only `🔙Назад`/`🔙Меню`, the agent then had no selectable action.
-
-`bot/agent.py` was hardened so that if a state classified as `quests` actually contains recognizable main-menu buttons, it is treated as the main menu for action selection and prefers `🏜Исследовать`. This is a local compatibility fix that does not alter Q-learning itself.
+A main keyboard containing `⭐️Задания` was being classified as `quests`. `bot/agent.py` was hardened to recognize main-menu buttons inside that misclassified state and prefer `🏜Исследовать`.
 
 Commit:
 - `fe6bd06` — handle misclassified main keyboard as quests.
+
+### Busy exploration detection — 2026-09-05
+
+Runtime showed that after starting exploration the game replied:
+
+`В данный момент ваше насекомое занято и не может исследовать мир.`
+
+The Telegram reply keyboard remained visible, so perception classified that response as `quests`, causing the agent to repeatedly press `🏜Исследовать` even though exploration was already running.
+
+`bot/perception.py` now checks the actual message text for the exploration-in-progress messages before interpreting the keyboard. Such messages are classified as `busy`, preventing stale main-menu buttons from being treated as executable actions.
+
+Commit:
+- `235debd` — fix busy exploration state detection.
