@@ -110,11 +110,26 @@ The runtime flow is now:
 6. Qwen returns structured knowledge candidates only; it is explicitly forbidden from selecting or executing actions.
 7. `KnowledgeWriter` persists sufficiently confident candidates under `data/knowledge/learned/<domain>/` as Markdown with frontmatter and evidence.
 
-Safety rules for learned knowledge:
-- Qwen cannot mark a candidate as confirmed; the writer normalizes it to a hypothesis/candidate state.
-- Candidates below confidence `0.55` are discarded.
-- Official knowledge remains authoritative and is never modified by the analyst.
-- Existing learned files are only replaced when the generated claim maps to the same deterministic claim hash.
+### Repeated-evidence confirmation — 2026-09-04
+
+`KnowledgeWriter` now maintains a persistent evidence ledger at `data/knowledge/learned/.evidence.json`.
+
+Each learned claim is aggregated by deterministic claim hash. Every observation stores:
+- stable observation ID derived from account + before/after state + action + reward;
+- account ID;
+- timestamp;
+- analyst confidence;
+- evidence supplied by Qwen.
+
+Promotion rules are deliberately conservative:
+- `< 0.55` confidence: discarded;
+- otherwise, a single observation is `hypothesis`;
+- at least 2 observations with average confidence `>= 0.80`: `candidate`;
+- at least 3 observations from at least 2 independent accounts with confidence `>= 0.70`: `confirmed`.
+
+Qwen itself cannot promote knowledge. Only repeated runtime evidence can do so. Confirmed knowledge remains under `learned/`; it does not become official and cannot overwrite official documentation.
+
+The generated Markdown now exposes support counts, independent-account counts and the accumulated evidence so the retrieval layer can distinguish weak hypotheses from repeatedly observed mechanics.
 
 ### Qwen configuration
 
@@ -131,11 +146,11 @@ The analyst uses Python's standard-library HTTP client, so no additional package
 
 ### Current learning boundary
 
-Q-learning still owns action selection. The Qwen analyst is an asynchronous observation/knowledge-extraction subsystem only. Retrieval supplies context; analyst output becomes learned hypotheses; those hypotheses can later improve retrieval context without silently changing the action policy.
+Q-learning still owns action selection. The Qwen analyst is an asynchronous observation/knowledge-extraction subsystem only. Retrieval supplies context; analyst output becomes learned hypotheses; repeated evidence can promote them to confirmed learned knowledge without changing the action policy directly.
 
 ### Retrieval roadmap
 
-Future improvements can add repeated-evidence promotion, contradiction handling, richer cross-account evidence aggregation and optional semantic/embedding retrieval. These are deliberately not required for the first autonomous analyst loop.
+Future improvements can add contradiction handling, semantic claim deduplication, richer cross-account evidence aggregation and optional semantic/embedding retrieval. These are deliberately not required for the current autonomous analyst loop.
 
 ### Retrieval document standard
 
