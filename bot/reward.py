@@ -1,8 +1,9 @@
 class RewardEngine:
-    def calculate(self, before, after) -> float:
+    def calculate(self, before, after, action: str = "") -> float:
         reward = 0.0
         before_text = before.raw_text.lower()
         after_text = after.raw_text.lower()
+        action_text = (action or "").strip().lower()
 
         reward += self._numeric_delta(before.self_data, after.self_data, "experience", 0.02)
         reward += self._numeric_delta(before.self_data, after.self_data, "level", 10.0)
@@ -30,7 +31,35 @@ class RewardEngine:
         if after.events and after.events != before.events:
             reward += 1.0
 
+        reward += self._action_shaping(before, after, action_text)
         return reward
+
+    def _action_shaping(self, before, after, action: str) -> float:
+        if not action:
+            return 0.0
+
+        if action == "атаковать":
+            if after.location == "battle":
+                return 0.5
+            return 0.0
+
+        if action in {"общение", "состояние (вы)", "состояние (враг)", "предметы", "снаряжение"}:
+            if after.location == before.location:
+                return -0.25
+            return -0.10
+
+        if action == "отступить":
+            if before.location == "battle" and after.location != "battle":
+                return -1.0
+            return -0.25
+
+        if action in {"назад", "🔙назад", "🔙меню"}:
+            return -0.05
+
+        if after.location != before.location:
+            return 0.10
+
+        return 0.0
 
     def _numeric_delta(self, before, after, key: str, multiplier: float) -> float:
         before_value = before.get(key)
