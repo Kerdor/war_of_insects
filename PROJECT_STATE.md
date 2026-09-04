@@ -45,13 +45,17 @@ war_of_insects/
 - SwitchInline buttons are ignored;
 - reply-keyboard actions are sent as normal messages;
 - runtime logging is enabled for detected state, available actions, selected action, and failed clicks;
-- added explicit logging when no actions are detected.
+- added explicit logging when no actions are detected;
+- the agent now merges the active reply keyboard with the current inline-keyboard message before perception and learning;
+- this prevents the agent from losing the persistent reply keyboard when an inline menu message appears.
 
 `telegram_client.py`:
 - the agent no longer relies strictly on the single latest Telegram message for the keyboard;
 - `get_latest()` scans recent bot-chat messages and returns the newest message that currently contains a keyboard;
 - falls back to the newest message when no keyboard is present;
-- this allows the self-learning agent to continue using the currently actionable keyboard even when a newer message without a keyboard was sent.
+- added detection of the most recent `ReplyKeyboardMarkup` in recent bot messages;
+- added `get_current_buttons()` to combine buttons from the current message with the persistent reply keyboard;
+- this allows the self-learning agent to keep seeing navigation actions such as the main reply keyboard while it is inside an inline-button menu.
 
 ### Multi-account behavior
 
@@ -83,6 +87,17 @@ The current agent uses:
 - learning statistics.
 
 The keyboard is treated as part of the perceived state/action space, so changing the keyboard changes the learned state rather than bypassing the learning system with hardcoded action sequences.
+
+### Current UI perception model
+
+Telegram can leave a persistent reply keyboard active while a newer bot message displays a separate inline keyboard. The agent therefore treats these as two layers of the actionable UI:
+- the current message supplies its inline/reply buttons;
+- the newest recent bot message containing `ReplyKeyboardMarkup` supplies the persistent navigation buttons;
+- both are passed into perception as available actions;
+- inline callback actions are clicked on their source message;
+- reply-keyboard actions are sent as normal messages.
+
+This is a perception/input fix only. It does not hardcode a route or force the agent to choose a particular action.
 
 ### Project structure commit
 
