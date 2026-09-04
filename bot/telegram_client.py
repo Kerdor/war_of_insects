@@ -56,6 +56,9 @@ class GameClient:
         return messages[0]
 
     async def get_reply_keyboard_message(self):
+        if self.reply_keyboard_message is not None:
+            return self.reply_keyboard_message
+
         messages = await self.client.get_messages(BOT_USERNAME, limit=20)
         for message in messages:
             if isinstance(getattr(message, "reply_markup", None), ReplyKeyboardMarkup):
