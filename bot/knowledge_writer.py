@@ -89,7 +89,7 @@ class KnowledgeWriter:
             f"**Status:** `{status}`  ",
             f"**Confidence:** `{confidence:.2f}`  ",
             f"**Observed by account:** `{account_id}`  ",
-            f"**Recorded at:** `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
+            f"**Recorded at:** `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}`",
             "",
         ]
         if conditions:
