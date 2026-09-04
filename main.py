@@ -6,14 +6,20 @@ from telegram_client import GameClient
 
 
 async def main():
-    if not ACCOUNTS:
-        raise RuntimeError("No accounts configured. Set PHONE_N and SESSION_NAME_N in .env")
+    enabled_accounts = [account for account in ACCOUNTS if account.enabled]
+
+    if not enabled_accounts:
+        raise RuntimeError("No enabled accounts configured. Set ACCOUNT_N_ENABLED=true in .env")
+
+    print(f"Configured enabled accounts: {len(enabled_accounts)}")
+    for account in enabled_accounts:
+        print(f"Enabled: {account.session_name}")
 
     agent = Agent()
     clients = []
 
     try:
-        for account in ACCOUNTS:
+        for account in enabled_accounts:
             client = GameClient(account)
             print(f"Connecting: {account.session_name}")
             await client.connect()
