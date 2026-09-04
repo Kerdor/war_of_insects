@@ -124,7 +124,12 @@ class KnowledgeRetriever:
         blocks: list[str] = []
         used = 0
         for hit in hits:
-            source_label = "OFFICIAL" if hit.chunk.document.source == "official" else "LEARNED"
+            if hit.chunk.document.source == "official":
+                source_label = "OFFICIAL"
+            elif hit.chunk.document.status == "conflicted":
+                source_label = "LEARNED-CONFLICT"
+            else:
+                source_label = "LEARNED"
             block = (
                 f"[SOURCE={source_label}]\n"
                 f"[STATUS={hit.chunk.document.status}]\n"
