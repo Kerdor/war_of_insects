@@ -10,6 +10,8 @@ Application code is grouped into the `bot/` package. Official game knowledge is 
 war_of_insects/
 ├── bot/
 │   ├── knowledge_retrieval.py
+│   ├── knowledge_writer.py
+│   ├── qwen_analyst.py
 │   └── ...
 ├── data/
 │   └── knowledge/
@@ -53,7 +55,7 @@ war_of_insects/
 
 The agent uses perception/state normalization, Q-learning, transition memory, strategy memory, experience memory, reward calculation, per-account runtime context and learning statistics.
 
-Q-learning remains responsible for autonomous action selection. The planned Qwen analyst observes gameplay and extracts durable knowledge instead of hardcoding routes.
+Q-learning remains responsible for autonomous action selection. The Qwen analyst observes gameplay and extracts durable knowledge instead of hardcoding routes.
 
 ### Knowledge architecture
 
@@ -95,16 +97,45 @@ The public retrieval interface is:
 
 The design intentionally avoids hard-coding game routes. Retrieval supplies knowledge to the analyst; Q-learning remains responsible for choosing actions.
 
+### Qwen analyst layer — 2026-09-04
+
+Added `bot/qwen_analyst.py` and `bot/knowledge_writer.py` and connected them to `Agent.step()`.
+
+The runtime flow is now:
+1. Perception parses the current Telegram observation into `GameState`.
+2. Q-learning selects and executes the action.
+3. The next state and reward are recorded in the existing learning systems.
+4. Every `QWEN_ANALYSIS_INTERVAL` completed transitions, the Qwen analyst is scheduled asynchronously so gameplay is not blocked by the network call.
+5. The analyst receives the before/after normalized states, selected action, reward, recent actions and retrieved official/learned context.
+6. Qwen returns structured knowledge candidates only; it is explicitly forbidden from selecting or executing actions.
+7. `KnowledgeWriter` persists sufficiently confident candidates under `data/knowledge/learned/<domain>/` as Markdown with frontmatter and evidence.
+
+Safety rules for learned knowledge:
+- Qwen cannot mark a candidate as confirmed; the writer normalizes it to a hypothesis/candidate state.
+- Candidates below confidence `0.55` are discarded.
+- Official knowledge remains authoritative and is never modified by the analyst.
+- Existing learned files are only replaced when the generated claim maps to the same deterministic claim hash.
+
+### Qwen configuration
+
+`.env.example` now documents:
+- `QWEN_ENABLED=false` — opt-in switch;
+- `QWEN_API_KEY`;
+- `QWEN_BASE_URL` (OpenAI-compatible endpoint, default DashScope compatible-mode endpoint);
+- `QWEN_MODEL`;
+- `QWEN_ANALYSIS_INTERVAL=10`;
+- `QWEN_MAX_TOKENS=1200`;
+- `QWEN_TIMEOUT=30`.
+
+The analyst uses Python's standard-library HTTP client, so no additional package is required.
+
+### Current learning boundary
+
+Q-learning still owns action selection. The Qwen analyst is an asynchronous observation/knowledge-extraction subsystem only. Retrieval supplies context; analyst output becomes learned hypotheses; those hypotheses can later improve retrieval context without silently changing the action policy.
+
 ### Retrieval roadmap
 
-Next integration step is the Qwen analyst layer. It should consume:
-1. current normalized game observation;
-2. retrieved official context;
-3. retrieved learned observations;
-4. recent transition/action history;
-5. reward/outcome information.
-
-The analyst should return structured knowledge candidates such as confirmed mechanics, hypotheses, action consequences, prerequisites, exceptions and confidence. It must not directly choose or execute gameplay actions.
+Future improvements can add repeated-evidence promotion, contradiction handling, richer cross-account evidence aggregation and optional semantic/embedding retrieval. These are deliberately not required for the first autonomous analyst loop.
 
 ### Retrieval document standard
 
