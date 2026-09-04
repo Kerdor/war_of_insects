@@ -284,13 +284,7 @@ class Agent:
             message = await client.get_latest()
             if message is None:
                 continue
-            buttons = []
-            for row in message.buttons or []:
-                buttons.extend(row)
-            reply_message = client.reply_keyboard_message
-            if reply_message is not None and reply_message.id != message.id:
-                for row in reply_message.buttons or []:
-                    buttons.extend(row)
+            buttons = await client.get_current_buttons(message)
             state = self.perception.parse(message.text or "", buttons)
             if self.perception.state_key(state) != state_key:
                 return message
