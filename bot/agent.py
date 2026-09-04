@@ -176,10 +176,18 @@ class Agent:
             if next_actions:
                 return next_actions
 
+        if state.location == "secondary_menu":
+            navigation = [
+                action for action in safe
+                if action.text.strip().lower() == "🔙меню"
+            ]
+            if navigation:
+                return navigation
+
         if state.location == "help":
             navigation = [
                 action for action in safe
-                if action.text.strip().lower() in {"🔙назад", "🔘далее"}
+                if action.text.strip().lower() == "🔙назад"
             ]
             if navigation:
                 return navigation
@@ -279,14 +287,6 @@ class Agent:
             if explore:
                 return explore
 
-        if state.location == "secondary_menu":
-            navigation = [
-                action for action in safe
-                if action.text.strip().lower() == "🔙меню"
-            ]
-            if navigation:
-                return navigation
-
         navigation_actions = {"назад", "🔙назад", "🔙меню"}
         if len(safe) == 1 and safe[0].text.strip().lower() in navigation_actions:
             return safe
@@ -312,18 +312,19 @@ class Agent:
         return None
 
     async def _click(self, client, message, action) -> bool:
-        if action.callback_data is not None:
-            for row in message.buttons or []:
-                for button in row:
-                    data = getattr(button, "data", None)
-                    if isinstance(data, bytes):
-                        data = data.decode("utf-8", errors="replace")
-                    if data == action.callback_data:
-                        await button.click()
-                        return True
+        for row in message.buttons or []:
+            buttons = row if isinstance(row, (list, tuple)) else [row]
+            for button in buttons:
+                data = getattr(button, "data", None)
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8", errors="replace")
+                if action.callback_data is not None and data == action.callback_data:
+                    await button.click()
+                    return True
 
         for row in message.buttons or []:
-            for button in row:
+            buttons = row if isinstance(row, (list, tuple)) else [row]
+            for button in buttons:
                 if isinstance(getattr(button, "button", None), KeyboardButtonSwitchInline):
                     continue
                 if getattr(button, "text", "") == action.text:
@@ -357,5 +358,8 @@ class Agent:
     def _flatten_buttons(self, message):
         result = []
         for row in message.buttons or []:
-            result.extend(row)
+            if isinstance(row, (list, tuple)):
+                result.extend(row)
+            else:
+                result.append(row)
         return result
