@@ -38,5 +38,12 @@ class GameClient:
         return await self.client.send_message(BOT_USERNAME, text)
 
     async def get_latest(self):
-        messages = await self.client.get_messages(BOT_USERNAME, limit=1)
-        return messages[0] if messages else None
+        messages = await self.client.get_messages(BOT_USERNAME, limit=20)
+        if not messages:
+            return None
+
+        for message in messages:
+            if message.buttons:
+                return message
+
+        return messages[0]
