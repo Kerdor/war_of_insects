@@ -3,13 +3,13 @@ import time
 
 from telethon.tl.types import KeyboardButtonSwitchInline
 
-from learning import QLearning
-from memory import ExperienceMemory
-from perception import Perception
-from reward import RewardEngine
-from stats import LearningStats
-from strategy import StrategyMemory
-from transitions import TransitionMemory
+from .learning import QLearning
+from .memory import ExperienceMemory
+from .perception import Perception
+from .reward import RewardEngine
+from .stats import LearningStats
+from .strategy import StrategyMemory
+from .transitions import TransitionMemory
 
 
 class Agent:

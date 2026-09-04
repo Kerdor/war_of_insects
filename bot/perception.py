@@ -4,7 +4,7 @@ import re
 
 from telethon.tl.types import KeyboardButtonSwitchInline
 
-from models import Action, GameState
+from .models import Action, GameState
 
 
 class Perception:

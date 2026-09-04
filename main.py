@@ -1,8 +1,8 @@
 import asyncio
 
-from agent import Agent
+from bot.agent import Agent
 from config import ACCOUNTS
-from telegram_client import GameClient
+from bot.telegram_client import GameClient
 
 
 async def main():
