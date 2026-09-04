@@ -11,13 +11,13 @@ class Perception:
     def parse(self, text: str, buttons=None) -> GameState:
         text = text or ""
         state = GameState(raw_text=text)
-        state.location = self._detect_location(text)
+        state.available_actions = self._parse_buttons(buttons or [])
+        state.location = self._detect_location(text, state.available_actions)
         state.current_action = self._parse_current_action(text)
         state.self_data = self._parse_creature(text, "Вы")
         state.enemy_data = self._parse_creature(text, "Вражеские существа")
         state.inventory = self._parse_inventory(text)
         state.events = self._parse_events(text)
-        state.available_actions = self._parse_buttons(buttons or [])
         return state
 
     def state_key(self, state: GameState) -> str:
@@ -33,7 +33,8 @@ class Perception:
         payload = json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def _detect_location(self, text: str) -> str:
+    def _detect_location(self, text: str, actions=None) -> str:
+        lowered = text.lower()
         checks = {
             "battle": ("Каков ваш приказ?", "наносит", "Вражеские существа", "Атаковать"),
             "exploration": ("Исследуя", "Дальность исследования", "исследовани"),
@@ -43,9 +44,55 @@ class Perception:
             "city": ("Город",),
         }
         for location, markers in checks.items():
-            if sum(marker.lower() in text.lower() for marker in markers) >= 1:
+            if sum(marker.lower() in lowered for marker in markers) >= 1:
                 return location
+
+        button_texts = {action.text.strip().lower() for action in (actions or [])}
+
+        if self._has_any(button_texts, "🏜 ближайшие территории", "⛰ умеренная дальность", "🌋 дальние территории", "🔘 сбор отряда"):
+            return "exploration"
+
+        if self._has_any(button_texts, "🦾сила", "🪶ловкость", "🏃атлетика", "👁восприятие", "⚔атака", "🛡защита", "💨уклонение"):
+            return "skills"
+
+        if self._has_any(button_texts, "💀голова", "🪲грудь", "🪱живот", "🐾лапы", "📥снять всё", "📌шаблоны"):
+            return "equipment"
+
+        if self._has_any(button_texts, "🏕тайники", "🗺использовать", "🗄сейфы"):
+            return "inventory"
+
+        if self._has_any(button_texts, "🔘далее") and self._has_any(
+            button_texts,
+            "🏞с чего начать новичку?",
+            "🐜насекомые",
+            "🏜исследование мира",
+            "🗺предметы",
+            "🔰кланы",
+            "🏆турниры",
+            "🐍отряд",
+        ):
+            return "tutorial"
+
+        if self._has_any(
+            button_texts,
+            "🏜исследовать",
+            "⭐️задания",
+            "🗞события",
+            "🐾насекомое",
+            "🍗состояние",
+            "💰инвентарь",
+            "⚔навыки",
+            "🗡снаряжение",
+        ):
+            return "main"
+
+        if self._has_any(button_texts, "❓помощь", "💬официальный чат", "📖справочник", "💡идеи"):
+            return "help"
+
         return "unknown"
+
+    def _has_any(self, values: set[str], *markers: str) -> bool:
+        return any(marker.lower() in values for marker in markers)
 
     def _parse_current_action(self, text: str) -> str:
         patterns = (
