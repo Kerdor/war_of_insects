@@ -170,26 +170,46 @@ Runtime observation showed a critical bootstrap problem:
 Fix applied:
 - `Perception` now parses buttons before location detection and uses distinctive button signatures in addition to text markers;
 - exploration, skills, equipment, inventory, tutorial, main menu and help screens can now be recognized from their button sets;
-- `Agent` now filters obviously dangerous/non-game actions such as payment, purchasing, deletion and discarding before passing actions to Q-learning;
+- `Agent` filters obviously dangerous/non-game actions such as payment, purchasing, deletion and discarding before passing actions to Q-learning;
 - tutorial screens with `🔘Далее` are bootstrapped deterministically when that action is available;
 - help screens prefer navigation (`🔙Назад` / `🔘Далее`) instead of random topic/external actions;
 - the Q-learning algorithm itself remains unchanged and continues to choose among the remaining meaningful actions.
 
-This is a safety/bootstrap layer around Q-learning, not a hardcoded gameplay route. Real gameplay actions remain available for autonomous learning.
+### Context-aware action filtering — 2026-09-04
+
+The next runtime log showed that button recognition alone was insufficient because Telegram persistent reply-keyboard actions are also present on submenu screens.
+
+Observed examples:
+- equipment screen exposed both equipment actions and the global battle/menu keyboard;
+- skills screen exposed skill actions together with global menu actions such as `⭐️Задания`;
+- pressing `🔘Далее` from the main menu opened a secondary menu containing `🏆Турнир`, `🏪Лавка`, `💵Кредиты` and other unrelated options;
+- battle control screens were still sometimes reported as `unknown`.
+
+Fix applied in `Agent._selectable_actions()`:
+- skills screens now pass skill-specific actions and valid battle controls to Q-learning, excluding the persistent global menu;
+- equipment screens now pass equipment-specific actions and valid battle controls, excluding the persistent global menu;
+- exploration screens now pass only exploration controls;
+- battle screens now pass only battle controls when the state is recognized;
+- main menus exclude `🔘Далее` when real main-menu actions are available, preventing accidental pagination into unrelated menus;
+- secondary menus use `🔙Меню` as the safe return path instead of randomly entering tournaments, shops, credits or bonuses;
+- dangerous actions remain filtered before Q-learning.
+
+The Q-learning algorithm itself was not modified. This layer only prevents persistent global buttons from contaminating the action set for a more specific current context.
 
 ### Current launch boundary
 
-The next local run should verify the navigation fix before any further architecture changes.
+The next local run should verify the context-aware action filtering.
 
 Recommended order:
 1. let `dev_runner.py` pull the latest commit and restart automatically;
 2. run with one enabled account;
-3. verify that common menus receive meaningful state labels instead of `unknown`;
-4. verify that payment/purchase/discard actions are never selected autonomously;
-5. verify that tutorial navigation uses `🔘Далее` when appropriate;
-6. verify real gameplay state → action → next state → reward → Q-learning flow;
-7. enable Qwen and verify analyst calls/learned output;
-8. only then enable additional accounts and long autonomous runs.
+3. verify skills/equipment/exploration/battle screens expose only context-relevant actions;
+4. verify the agent no longer jumps from a submenu into `⭐️Задания`, `🏆Турнир`, `🏪Лавка` or similar global actions merely because those buttons are present;
+5. verify payment/purchase/discard actions are never selected autonomously;
+6. verify battle control screens are recognized or at least filtered to battle actions;
+7. verify real gameplay state → action → next state → reward → Q-learning flow;
+8. enable Qwen and verify analyst calls/learned output;
+9. only then enable additional accounts and long autonomous runs.
 
 ### Current learning boundary
 
