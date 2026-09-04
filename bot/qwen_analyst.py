@@ -91,6 +91,7 @@ class QwenAnalyst:
             query or "game mechanics",
             top_k=6,
             max_chars=8000,
+            include_conflicted=True,
         )
 
         payload = {
