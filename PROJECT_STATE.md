@@ -39,3 +39,23 @@ The analyst receives:
 The prompt instructs Qwen to compare the actual before/after Telegram text first, distinguish directly observed facts from hypotheses, and use parsed state only as supporting information. Ollama JSON output mode is enabled for more reliable structured responses.
 
 Qwen remains an evaluator/mechanics analyst. It does not choose or execute gameplay actions; Q-learning remains responsible for action selection.
+
+### Runtime connection issue — 2026-09-04
+
+A local run with `C:\Python314\python.exe` did not reach the `Connected: auth/kerdor` log line. Telethon repeatedly reported:
+
+`Server closed the connection: 0 bytes read on a total of 8 expected bytes`
+
+The message is emitted by Telethon's MTProto connection layer and is known to occur when the Telegram server closes a TCP connection; it is not evidence of a Qwen or agent-state failure.
+
+The project dependency was updated from an unpinned `telethon` to:
+
+`telethon>=1.44.0`
+
+This is important because the runtime uses Python 3.14, and current Telethon 1.44.0 explicitly includes Python 3.14 compatibility fixes.
+
+The code architecture was not changed to work around the network error. The local environment must install the updated dependency before the next run.
+
+### Current launch boundary
+
+Before the next run, update the local Python environment from `requirements.txt`. Then verify that `Connected: auth/kerdor` appears before judging the agent/Qwen runtime.
