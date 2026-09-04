@@ -42,7 +42,7 @@ async def main():
         await asyncio.gather(*(play(account, client) for account, client in clients))
     finally:
         for _, client in clients:
-            if client.is_connected():
+            if client.client.is_connected():
                 await client.disconnect()
 
 
