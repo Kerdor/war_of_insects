@@ -31,6 +31,7 @@ class Agent:
         actions = [action.key or action.text for action in state.available_actions]
 
         if not actions:
+            print(f"[{account_id}] No actions detected | State: {state.location} | Buttons: {len(buttons)}")
             return None
 
         target = state.enemy_data.get("species") or state.enemy_data.get("name") or "unknown"
