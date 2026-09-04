@@ -2,6 +2,8 @@ import hashlib
 import json
 import re
 
+from telethon.tl.types import KeyboardButtonSwitchInline
+
 from models import Action, GameState
 
 
@@ -295,6 +297,8 @@ class Perception:
         for button in buttons:
             if isinstance(button, Action):
                 result.append(button)
+                continue
+            if isinstance(getattr(button, "button", None), KeyboardButtonSwitchInline):
                 continue
             text = getattr(button, "text", str(button))
             callback_data = getattr(button, "data", None)
