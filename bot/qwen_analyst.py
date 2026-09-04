@@ -174,17 +174,7 @@ class QwenAnalyst:
         candidates = result.get("candidates", [])
         if not isinstance(candidates, list):
             return
-        for candidate in candidates:
-            if not isinstance(candidate, dict):
-                continue
-            try:
-                self.writer.add_candidate(
-                    account_id,
-                    state_before,
-                    action,
-                    state_after,
-                    reward,
-                    candidate,
-                )
-            except Exception as exc:
-                print(f"[QWEN] Knowledge write failed for {account_id}: {exc}")
+        try:
+            self.writer.write_candidates(candidates, account_id)
+        except Exception as exc:
+            print(f"[QWEN] Knowledge write failed for {account_id}: {exc}")
