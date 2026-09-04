@@ -125,11 +125,40 @@ The separation is intentional: official/reference information must not be mixed 
 
 Official skill documentation is being collected separately from learned observations.
 
-- `data/knowledge/official/skills.md` created;
-- currently contains official descriptions of Strength, Agility, Athletics, Perception, Attack, Defense, Dodge, Cutting, Slashing, Blunt, Piercing, Stealth, Lockpicking, Theft, General Crafting, Weapon Forging, Armor Forging, Alchemy, Cooking, Engineering, and Medicine;
-- added official innate-skill information for the wasp: Poison and Hunter;
+- `data/knowledge/official/skills.md` contains official descriptions of Strength, Agility, Athletics, Perception, Attack, Defense, Dodge, Cutting, Slashing, Blunt, Piercing, Stealth, Lockpicking, Theft, General Crafting, Weapon Forging, Armor Forging, Alchemy, Cooking, Engineering, and Medicine;
+- includes official innate-skill information for the wasp: Poison and Hunter;
 - current character levels and temporary equipment/innate bonuses are not treated as permanent skill knowledge.
+
+### Built-in tutorial knowledge
+
+Built-in game onboarding has been recorded separately in `data/knowledge/official/tutorial.md`.
+
+The tutorial knowledge now covers:
+- initial game concept and onboarding rewards;
+- insect species selection and the rule that species can be changed later;
+- species-specific innate skills, including the example of the Jumping Beetle (`Бегун`, `Ассассин`) and Wasp (`Яд`, `Охотник`);
+- naming restrictions;
+- profile parameters: level, XP, condition, hunger, water, and current action;
+- the complete skill category structure;
+- body condition, blood, hunger, water, carrying capacity, body parts, regeneration, and vital body parts;
+- species-specific feeding and food acquisition;
+- world exploration and the three exploration ranges;
+- relationship between enemy strength and XP rewards;
+- battle state representation and the meaning of body-part health versus skill levels;
+- basic combat effects of Strength, Agility, Attack, Defense, Dodge, and innate skills;
+- a concrete two-attack tutorial battle example and the resulting victory/loot/Attack skill gain;
+- stashes, their protection from combat theft, the limit of three stashes, and the `Тайник` command;
+- escape mechanics and preservation of equipment/inventory after successful escape;
+- `/completeTutorial`, `/handbook`, and `/FAQ`.
+
+This tutorial is treated as official/reference knowledge rather than learned experience. It is intended to give the future Qwen analyst and the self-learning agent a reliable initial model of basic game mechanics, while Q-learning remains responsible for autonomous action selection and experience-based adaptation.
 
 ### Project structure commit
 
 `4b493c846efdf60201c95302b7d9fea5f4b92f53`
+
+### Documentation checkpoint — 2026-09-04
+
+- Added `data/knowledge/official/tutorial.md` with the built-in tutorial/onboarding knowledge collected from gameplay.
+- Tutorial knowledge is explicitly separated from `data/knowledge/learned/` because it comes from the game's own onboarding and should be treated as reference information.
+- Commit: `79e3d8bfaf2775506ab265889a4b686dd4407cf7`
