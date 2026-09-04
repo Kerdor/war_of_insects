@@ -4,59 +4,37 @@
 
 ### Current structure
 
-Application code is grouped into the `bot/` package instead of being kept as many Python files in the repository root.
+Application code is grouped into the `bot/` package. Official game knowledge is stored separately from learned observations.
 
 ```text
 war_of_insects/
 ├── bot/
-│   ├── __init__.py
-│   ├── agent.py
-│   ├── learning.py
-│   ├── memory.py
-│   ├── models.py
-│   ├── perception.py
-│   ├── reward.py
-│   ├── stats.py
-│   ├── strategy.py
-│   ├── telegram_client.py
-│   └── transitions.py
+├── data/
+│   └── knowledge/
+│       ├── official/
+│       │   ├── README.md
+│       │   ├── commands.md
+│       │   ├── basics/
+│       │   ├── combat/
+│       │   ├── exploration/
+│       │   ├── items/
+│       │   ├── crafting/
+│       │   ├── clans/
+│       │   ├── tournaments/
+│       │   ├── squad/
+│       │   └── source pages (*.md)
+│       └── learned/
 ├── config.py
 ├── dev_runner.py
-├── .env.example
-├── .gitignore
-├── requirements.txt
-├── README.md
-└── data/
+└── main.py
 ```
-
-`main.py`, `config.py`, and `dev_runner.py` remain at the root as entry point, configuration, and development runner.
 
 ### Runtime fixes
 
-`learning.py`:
-- fixed unpacking of `TransitionMemory.predict()` result;
-- transition prediction returns `(count, next_state, average_reward)`.
-
-`main.py`:
-- fixed cleanup check to use the underlying Telethon client's `is_connected()`.
-
-`agent.py` / `perception.py`:
-- fixed `Start parameter invalid (caused by StartBotRequest)` from Telegram `KeyboardButtonSwitchInline` buttons;
-- SwitchInline buttons are ignored;
-- reply-keyboard actions are sent as normal messages;
-- runtime logging is enabled for detected state, available actions, selected action, and failed clicks;
-- added explicit logging when no actions are detected;
-- the agent now merges the active reply keyboard with the current inline-keyboard message before perception and learning;
-- this prevents the agent from losing the persistent reply keyboard when an inline menu message appears.
-
-`telegram_client.py`:
-- the agent no longer relies strictly on the single latest Telegram message for the keyboard;
-- `get_latest()` scans recent bot-chat messages and returns the newest message that currently contains a keyboard;
-- falls back to the newest message when no keyboard is present;
-- added detection of the most recent `ReplyKeyboardMarkup` in recent bot messages;
-- added `get_current_buttons()` to combine buttons from the current message with the persistent reply keyboard;
-- added an in-memory `reply_keyboard_message` cache so a previously detected persistent Reply Keyboard remains available after its message leaves the recent-message window;
-- new Reply Keyboard messages refresh the cache automatically.
+- `learning.py`: fixed unpacking of `TransitionMemory.predict()`; prediction returns `(count, next_state, average_reward)`.
+- `main.py`: cleanup uses the underlying Telethon client's `is_connected()`.
+- `agent.py` / `perception.py`: SwitchInline buttons are ignored; reply-keyboard actions are sent as messages; state/action/failure logging is enabled; persistent reply keyboard is merged with the current inline keyboard.
+- `telegram_client.py`: recent messages are scanned for keyboards; the persistent `ReplyKeyboardMarkup` is cached; `get_current_buttons()` combines current and persistent actions.
 
 ### Multi-account behavior
 
@@ -67,95 +45,68 @@ war_of_insects/
 
 ### Development runner
 
-`dev_runner.py`:
-- starts `main.py`;
-- runs `git pull` every 5 seconds;
-- detects a new `HEAD` commit;
-- restarts `main.py` when code changes;
-- keeps the runner alive across restarts;
-- does not modify `.env` or Telegram session files.
+`dev_runner.py` starts `main.py`, polls `git pull` every 5 seconds, detects a new HEAD and restarts the application without modifying `.env` or Telegram session files.
 
 ### Learning architecture
 
-The current agent uses:
-- perception/state normalization;
-- Q-learning;
-- transition memory;
-- strategy memory;
-- experience memory;
-- reward calculation;
-- per-account runtime context;
-- learning statistics.
+The agent uses perception/state normalization, Q-learning, transition memory, strategy memory, experience memory, reward calculation, per-account runtime context and learning statistics.
 
-The keyboard is treated as part of the perceived state/action space, so changing the keyboard changes the learned state rather than bypassing the learning system with hardcoded action sequences.
+Q-learning remains responsible for autonomous action selection. The planned Qwen analyst observes gameplay and extracts durable knowledge instead of hardcoding routes.
 
-### Current UI perception model
+### Knowledge architecture
 
-Telegram can leave a persistent reply keyboard active while a newer bot message displays a separate inline keyboard. The agent therefore treats these as two layers of the actionable UI:
-- the current message supplies its inline/reply buttons;
-- the newest recent bot message containing `ReplyKeyboardMarkup` supplies the persistent navigation buttons;
-- once discovered, the persistent Reply Keyboard is cached in `GameClient` and remains available even when its source message is older than the recent-message window;
-- both are passed into perception as available actions;
-- inline callback actions are clicked on their source message;
-- reply-keyboard actions are sent as normal messages.
+Knowledge is intentionally divided into:
 
-This is a perception/input fix only. It does not hardcode a route or force the agent to choose a particular action.
+- `data/knowledge/official/` — trusted/reference information from the official game documentation and tutorial;
+- `data/knowledge/learned/` — future observations, hypotheses, discovered mechanics, action consequences and other experience-derived information.
 
-### Planned AI analyst layer
+Official source pages are retained as archival/context documents. For Qwen retrieval, the same information is additionally normalized into small topical files. This is preferred over putting everything into a few giant Markdown documents because retrieval can select a narrow concept without loading an entire handbook page.
 
-A separate AI analyst layer is planned on top of the existing Q-learning agent. Its role will be observation and knowledge extraction rather than direct control:
-- analyze game messages, buttons, perceived state, selected actions, transitions, and rewards;
-- identify useful game mechanics and consequences that are difficult to infer from raw Q-learning data alone;
-- store durable observations/knowledge for later decisions;
-- provide contextual information to the learning system without replacing autonomous action selection.
+### Qwen-friendly official knowledge structure — 2026-09-04
 
-The AI analyst will not hardcode routes or bypass the self-learning architecture.
+Added `data/knowledge/official/README.md` as the knowledge map and `data/knowledge/official/commands.md` as a command-oriented lookup table.
 
-### Knowledge collection for Qwen
+Normalized topics:
+- `basics/game_overview.md`
+- `basics/status.md`
+- `basics/body.md`
+- `basics/skills.md`
+- `exploration/world.md`
+- `exploration/locations.md`
+- `combat/combat.md`
+- `combat/damage.md`
+- `items/overview.md`
+- `items/storage.md`
+- `items/food.md`
+- `items/potions.md`
+- `items/weapons.md`
+- `items/trading.md`
+- `crafting/crafting.md`
+- `clans/overview.md`
+- `clans/rating.md`
+- `clans/buildings.md`
+- `clans/roles_permissions.md`
+- `tournaments/tournaments.md`
+- `squad/squad.md`
 
-We are currently collecting game information, bot/gameplay guides, mechanics, descriptions, and other durable knowledge that will later be used as a knowledge base for the local Qwen model.
+The original source documents remain available:
+- `tutorial.md`
+- `guide.md`
+- `game_mechanics.md`
+- `exploration.md`
+- `items.md`
+- `skills.md`
+- `trading_crafting_clans_tournaments_squad.md`
 
-Knowledge is separated into two planned categories:
-- `data/knowledge/official/` — official game information, tutorials, guides, skill descriptions, mechanics, and other trusted/reference material supplied by the game documentation;
-- `data/knowledge/learned/` — observations, hypotheses, discovered mechanics, action consequences, and other information learned by the bot during gameplay.
+### Documentation history
 
-The separation is intentional: official/reference information must not be mixed with uncertain observations learned from experience. Later, Qwen will use both sources as context for analysis and knowledge extraction while Q-learning remains responsible for autonomous action selection.
+- Tutorial knowledge: commit `79e3d8bfaf2775506ab265889a4b686dd4407cf7`.
+- Exploration source page: commit `54f42c54964b684ffd5c80819d6a9f0f52d55fe5`.
+- Items source page: commit `2ed86b547c645acdc3d2d6e5f36270fc1273115c`.
+- Trading/crafting/clans/tournaments/squad source page: commit `d379c6a4310e7863375be660865d6474a4d7ae57`.
+- Qwen normalization index: commit `ebbf14548f83a5916553fa4c3da72465aa953071`.
+- Qwen command index: commit `2a4803f190582986a40c9a8f43137cfc23754af6`.
 
-### Official game knowledge
+### Design decision
 
-Official skill documentation is being collected separately from learned observations.
-
-- `data/knowledge/official/skills.md` contains official descriptions of Strength, Agility, Athletics, Perception, Attack, Defense, Dodge, Cutting, Slashing, Blunt, Piercing, Stealth, Lockpicking, Theft, General Crafting, Weapon Forging, Armor Forging, Alchemy, Cooking, Engineering, and Medicine;
-- includes official innate-skill information for the wasp: Poison and Hunter;
-- current character levels and temporary equipment/innate bonuses are not treated as permanent skill knowledge.
-
-### Built-in tutorial knowledge
-
-Built-in game onboarding has been recorded separately in `data/knowledge/official/tutorial.md`.
-
-The tutorial knowledge now covers:
-- initial game concept and onboarding rewards;
-- insect species selection and the rule that species can be changed later;
-- species-specific innate skills, including the example of the Jumping Beetle (`Бегун`, `Ассассин`) and Wasp (`Яд`, `Охотник`);
-- naming restrictions;
-- profile parameters: level, XP, condition, hunger, water, and current action;
-- the complete skill category structure;
-- body condition, blood, hunger, water, carrying capacity, body parts, regeneration, and vital body parts;
-- species-specific feeding and food acquisition;
-- world exploration and the three exploration ranges;
-- relationship between enemy strength and XP rewards;
-- battle state representation and the meaning of body-part health versus skill levels;
-- basic combat effects of Strength, Agility, Attack, Defense, Dodge, and innate skills;
-- a concrete two-attack tutorial battle example and the resulting victory/loot/Attack skill gain;
-- stashes, their protection from combat theft, the limit of three stashes, and the `Тайник` command;
-- escape mechanics and preservation of equipment/inventory after successful escape;
-- `/completeTutorial`, `/handbook`, and `/FAQ`.
-
-This tutorial is treated as official/reference knowledge rather than learned experience. It is intended to give the future Qwen analyst and the self-learning agent a reliable initial model of basic game mechanics, while Q-learning remains responsible for autonomous action selection and experience-based adaptation.
-
-### Documentation checkpoint — 2026-09-04
-
-- Added `data/knowledge/official/tutorial.md` with the built-in tutorial/onboarding knowledge collected from gameplay. Commit: `79e3d8bfaf2775505f55c745467bb3fd09a43a`.
-- Added `data/knowledge/official/exploration.md` with the third official handbook page covering world exploration, ranges, squads, enemies, locations, maps, taming, and events. Commit: `54f42c54964b684ffd5c80819d6a9f0f52d55fe5`.
-- Added `data/knowledge/official/items.md` with the fourth official handbook page covering items, credits, delivery, rarity, loot, trading, storage, food, potions, weapons, weapon characteristics, damage types, weight, armor interaction, and weapon classes. Commit: `2ed86b547c645acdc3d2d6e5f36270fc1273115c`.
-- Added `data/knowledge/official/trading_crafting_clans_tournaments_squad.md` with the next official handbook page covering player trades, gifts, crafting, clans, clan rating/rewards/buildings/roles/permissions, tournaments, tournament participation, and squad commands. Commit: `d379c6a4310e7863375be660865d6474a4d7ae57`.
+Do not delete the original source pages. They are the canonical archival layer. The normalized files are the retrieval layer. This gives Qwen both fast narrow retrieval and broader source context when necessary.
