@@ -55,6 +55,7 @@ class KnowledgeWriter:
                 conditions=conditions,
                 consequences=consequences,
                 exceptions=exceptions,
+                digest=digest,
             )
             path.write_text(content, encoding="utf-8")
             written.append(path)
@@ -71,6 +72,7 @@ class KnowledgeWriter:
         conditions: str,
         consequences: str,
         exceptions: str,
+        digest: str,
     ) -> str:
         domain = self._slug(candidate.get("domain", "general")) or "general"
         kind = self._slug(candidate.get("type", "observation")) or "observation"
@@ -87,7 +89,7 @@ class KnowledgeWriter:
             f"**Status:** `{status}`  ",
             f"**Confidence:** `{confidence:.2f}`  ",
             f"**Observed by account:** `{account_id}`  ",
-            f"**Recorded at:** `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}`",
+            f"**Recorded at:** `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
             "",
         ]
         if conditions:
@@ -99,7 +101,7 @@ class KnowledgeWriter:
         sections.extend(["## Evidence", "", evidence_lines, ""])
         return (
             "---\n"
-            f"id: learned-{domain}-{kind}\n"
+            f"id: learned-{domain}-{kind}-{digest}\n"
             f"type: {self._yaml_value(kind)}\n"
             f"domain: {self._yaml_value(domain)}\n"
             "source: learned\n"
