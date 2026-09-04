@@ -91,7 +91,6 @@ class QwenAnalyst:
             query or "game mechanics",
             top_k=6,
             max_chars=8000,
-            include_conflicted=True,
         )
 
         payload = {
@@ -153,25 +152,23 @@ class QwenAnalyst:
         return (
             "Analyze exactly one gameplay transition. Return JSON only, with this schema:\n"
             "{\"candidates\":[{\"type\":\"mechanic|action_consequence|prerequisite|exception|hypothesis\","
-            "\"claim\":\"...\",\"mechanic_key\":\"stable_snake_case_topic\","
-            "\"relation\":\"new|supports|contradicts|unclear\",\"conflicts_with\":[\"exact existing claim text\"],"
-            "\"domain\":\"...\",\"confidence\":0.0,"
-            "\"status\":\"hypothesis|candidate\",\"conditions\":\"...\","
-            "\"consequences\":\"...\",\"exceptions\":\"...\","
+            "\"claim\":\"...\",\"mechanic_key\":\"stable_machine_readable_topic\","
+            "\"relation\":\"new|supports|contradicts|unclear\",\"conflicts_with\":[\"claim text\"],"
+            "\"domain\":\"...\",\"confidence\":0.0,\"status\":\"hypothesis|candidate\","
+            "\"conditions\":\"...\",\"consequences\":\"...\",\"exceptions\":\"...\","
             "\"evidence\":[\"...\"],\"related\":[\"...\"]}]}\n\n"
             "Rules:\n"
             "- Produce at most 5 candidates.\n"
-            "- mechanic_key must identify the underlying mechanic, not the wording of the claim.\n"
-            "- Use relation=supports only when the observation supports an existing learned claim.\n"
-            "- Use relation=contradicts only for a materially incompatible claim about the same mechanic. "
-            "A different condition, exception, target, or context is not automatically a contradiction.\n"
-            "- If relation=contradicts, conflicts_with must contain the exact existing claim text from the supplied knowledge context.\n"
-            "- If the transition is insufficient to distinguish two explanations, use relation=unclear and do not invent a contradiction.\n"
             "- Confidence must reflect evidence, not plausibility.\n"
             "- A single transition normally supports a hypothesis, not a confirmed rule.\n"
             "- Never mark a candidate as confirmed. The writer confirms only after repeated independent evidence.\n"
             "- Official source text is authoritative; learned text is only prior observation.\n"
-            "- LEARNED-CONFLICT entries are unresolved. Do not select one side as true without new evidence.\n"
+            "- relation=supports means the observation agrees with an existing learned claim.\n"
+            "- relation=contradicts means the observation materially conflicts with an existing learned claim under the same mechanic_key.\n"
+            "- Different conditions are not automatically contradictions. Only mark contradicts when the claims cannot both be true under the same stated conditions.\n"
+            "- conflicts_with should contain the exact claim text from retrieved learned context when a contradiction is identified; otherwise return [].\n"
+            "- If retrieved knowledge contains a conflict, do not resolve it by guessing. Preserve uncertainty and use relation=unclear when evidence is insufficient.\n"
+            "- Do not use conflicted knowledge as an authoritative rule.\n"
             "- Do not copy large source passages.\n"
             "- If there is not enough evidence for durable knowledge, return {\"candidates\":[]}.\n\n"
             f"OBSERVATION:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
