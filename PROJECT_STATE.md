@@ -22,7 +22,6 @@ war_of_insects/
 │   └── transitions.py
 ├── config.py
 ├── dev_runner.py
-├── main.py
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
@@ -45,7 +44,14 @@ war_of_insects/
 - fixed `Start parameter invalid (caused by StartBotRequest)` from Telegram `KeyboardButtonSwitchInline` buttons;
 - SwitchInline buttons are ignored;
 - reply-keyboard actions are sent as normal messages;
-- runtime logging is enabled for detected state, available actions, selected action, and failed clicks.
+- runtime logging is enabled for detected state, available actions, selected action, and failed clicks;
+- added explicit logging when no actions are detected.
+
+`telegram_client.py`:
+- the agent no longer relies strictly on the single latest Telegram message for the keyboard;
+- `get_latest()` scans recent bot-chat messages and returns the newest message that currently contains a keyboard;
+- falls back to the newest message when no keyboard is present;
+- this allows the self-learning agent to continue using the currently actionable keyboard even when a newer message without a keyboard was sent.
 
 ### Multi-account behavior
 
@@ -75,6 +81,8 @@ The current agent uses:
 - reward calculation;
 - per-account runtime context;
 - learning statistics.
+
+The keyboard is treated as part of the perceived state/action space, so changing the keyboard changes the learned state rather than bypassing the learning system with hardcoded action sequences.
 
 ### Project structure commit
 
