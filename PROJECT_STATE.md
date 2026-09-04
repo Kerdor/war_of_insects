@@ -64,23 +64,52 @@ Official source pages are retained as archival/context documents. The normalized
 
 ### Qwen-friendly official knowledge structure — 2026-09-04
 
-The first normalized pass was too compressed for reliable reasoning. It has now been corrected: detailed mechanics are kept in topical files instead of being reduced to short summaries.
+The first normalized pass was too compressed for reliable reasoning. The entire normalized topic layer has now been expanded so that the topic files contain substantive rules, conditions, effects, requirements, restrictions, examples and operational commands instead of short summaries.
 
 Current combat retrieval structure:
+- `combat/combat.md` — detailed combat model and relationships between skills, body state, equipment, effects, pursuit and outcomes;
 - `combat/damage.md` — navigation/index only;
 - `combat/damage_types.md` — detailed four damage types, mixed damage and stat relationships;
 - `combat/damage_effects.md` — bleeding, amputation, fractures and piercing;
 - `combat/armor.md` — body coverage, independent armor checks, damage calculation example and armor classes;
 - `combat/body_damage.md` — vital body parts, limbs, blood, unconsciousness, limb loss and restoration.
 
-`basics/skills.md` was expanded from a short summary into a detailed reference containing the official descriptions, effects and training methods for the ordinary core, combat, weapon, stealth/theft, crafting and science skills. The original `official/skills.md` remains the source document, including the separate innate-skill section.
+`basics/skills.md` remains the detailed skill reference, including official descriptions, effects and training methods for ordinary core, combat, weapon, stealth/theft, crafting and science skills. The original `official/skills.md` remains the source document, including the separate innate-skill section.
 
-The standard for future normalized files is now:
-- preserve source detail rather than summarizing it away;
+The rest of the normalized topic layer has also been expanded from compressed summaries into detailed retrieval documents:
+- `basics/game_overview.md`
+- `basics/status.md`
+- `basics/body.md`
+- `exploration/world.md`
+- `exploration/locations.md`
+- `items/overview.md`
+- `items/storage.md`
+- `items/food.md`
+- `items/potions.md`
+- `items/weapons.md`
+- `items/trading.md`
+- `crafting/crafting.md`
+- `clans/overview.md`
+- `clans/rating.md`
+- `clans/buildings.md`
+- `clans/roles_permissions.md`
+- `tournaments/tournaments.md`
+- `squad/squad.md`
+
+Index-oriented files remain intentionally concise:
+- `official/README.md` — map of the knowledge base;
+- `official/commands.md` — command-oriented lookup;
+- `combat/damage.md` — combat-damage navigation.
+
+### Retrieval document standard
+
+Every substantive normalized document should:
+- preserve meaningful source detail rather than summarizing it away;
 - split only along meaningful retrieval boundaries;
 - keep conditions, effects, requirements, restrictions, exceptions and examples;
-- add lightweight frontmatter with stable `id`, `type`, `domain`, `source`, `keywords` and `related` fields;
-- use index files only for navigation, not as replacements for detailed knowledge.
+- use lightweight frontmatter with stable `id`, `type`, `domain`, `source`, `keywords` and `related` fields;
+- use index files only for navigation;
+- avoid replacing authoritative source details with guesses when the source is ambiguous or internally inconsistent.
 
 ### Existing normalized topics
 
@@ -117,9 +146,7 @@ The standard for future normalized files is now:
 - Exploration source page: commit `54f42c54964b684ffd5c80819d6a9f0f52d55fe5`.
 - Items source page: commit `2ed86b547c645acdc3d2d6e5f36270fc1273115c`.
 - Trading/crafting/clans/tournaments/squad source page: commit `d379c6a4310e7863375be660865d6474a4d7ae57`.
-- Latest combat expansion: commit `7a79d7ed373ea80bfc54b1c6faf7fdc5abeb6cfb`.
-- Latest detailed skills restoration: commit `b61d5389a022cd81840991ac021670bdfd2237c0`.
-- Latest knowledge index standard: commit `5a09af9013e4fcf01616840b3aa6bbec71696fbb`.
+- Complete normalized knowledge expansion: current documentation update sequence ending at commit `f749abbe9788279c9b52411c4e9202c8d18841d1`.
 
 ### Design decision
 
