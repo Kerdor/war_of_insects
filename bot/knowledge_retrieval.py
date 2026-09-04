@@ -12,6 +12,7 @@ class KnowledgeDocument:
     title: str
     domain: str
     source: str
+    status: str
     keywords: tuple[str, ...]
     related: tuple[str, ...]
     text: str
@@ -72,6 +73,7 @@ class KnowledgeRetriever:
         domain: str | None = None,
         source: str | None = None,
         include_learned: bool = True,
+        include_conflicted: bool = False,
     ) -> list[KnowledgeHit]:
         query_terms = self._terms(query)
         if not query_terms:
@@ -85,6 +87,8 @@ class KnowledgeRetriever:
             if source and document.source != source:
                 continue
             if not include_learned and document.source == "learned":
+                continue
+            if document.source == "learned" and document.status == "conflicted" and not include_conflicted:
                 continue
 
             matched = query_terms & chunk.terms
@@ -105,12 +109,14 @@ class KnowledgeRetriever:
         max_chars: int = 9000,
         domain: str | None = None,
         include_learned: bool = True,
+        include_conflicted: bool = False,
     ) -> str:
         hits = self.search(
             query,
             top_k=top_k,
             domain=domain,
             include_learned=include_learned,
+            include_conflicted=include_conflicted,
         )
         if not hits:
             return ""
@@ -118,9 +124,15 @@ class KnowledgeRetriever:
         blocks: list[str] = []
         used = 0
         for hit in hits:
-            source_label = "OFFICIAL" if hit.chunk.document.source == "official" else "LEARNED"
+            if hit.chunk.document.source == "official":
+                source_label = "OFFICIAL"
+            elif hit.chunk.document.status == "conflicted":
+                source_label = "LEARNED-CONFLICT"
+            else:
+                source_label = "LEARNED"
             block = (
                 f"[SOURCE={source_label}]\n"
+                f"[STATUS={hit.chunk.document.status}]\n"
                 f"[FILE={hit.chunk.document.path}]\n"
                 f"[SECTION={hit.chunk.heading}]\n"
                 f"{hit.chunk.text.strip()}"
@@ -141,6 +153,7 @@ class KnowledgeRetriever:
         top_k: int = 5,
         max_chars: int = 9000,
         domain: str | None = None,
+        include_conflicted: bool = True,
     ) -> str:
         context = self.build_context(
             query,
@@ -148,13 +161,17 @@ class KnowledgeRetriever:
             max_chars=max_chars,
             domain=domain,
             include_learned=True,
+            include_conflicted=include_conflicted,
         )
         if not context:
             return "No relevant knowledge was retrieved."
         return (
             "Use the retrieved knowledge as reference context. Official knowledge "
             "is trusted documentation; learned knowledge consists of observations "
-            "and hypotheses and must not override explicit official rules.\n\n"
+            "and hypotheses and must not override explicit official rules. "
+            "LEARNED-CONFLICT entries are unresolved contradictory observations: "
+            "do not treat either side as established truth and do not resolve the "
+            "conflict by guessing.\n\n"
             + context
         )
 
@@ -169,6 +186,7 @@ class KnowledgeRetriever:
             metadata, body = self._parse_frontmatter(text)
             domain = metadata.get("domain") or self._infer_domain(relative)
             title = metadata.get("id") or path.stem
+            status = metadata.get("status", "established" if source == "official" else "hypothesis")
             keywords = tuple(self._split_metadata(metadata.get("keywords", "")))
             related = tuple(self._split_metadata(metadata.get("related", "")))
             document = KnowledgeDocument(
@@ -176,6 +194,7 @@ class KnowledgeRetriever:
                 title=title,
                 domain=domain,
                 source=metadata.get("source", source),
+                status=status,
                 keywords=keywords,
                 related=related,
                 text=body,
@@ -212,6 +231,7 @@ class KnowledgeRetriever:
                         [
                             document.title,
                             document.domain,
+                            document.status,
                             " ".join(document.keywords),
                             " ".join(document.related),
                             section_heading,
@@ -282,6 +302,8 @@ class KnowledgeRetriever:
         metadata_bonus += len(matched & metadata_terms) * 0.75
 
         trust_bonus = 1.0 if chunk.document.source == "official" else 0.35
+        if chunk.document.status == "conflicted":
+            trust_bonus = -1.0
         return 6.0 * coverage + 2.0 * math.sqrt(density) + exact_bonus + metadata_bonus + trust_bonus
 
     @classmethod
