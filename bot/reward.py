@@ -7,13 +7,13 @@ class RewardEngine:
 
         reward += self._numeric_delta(before.self_data, after.self_data, "experience", 0.02)
         reward += self._numeric_delta(before.self_data, after.self_data, "level", 10.0)
-        reward += self._numeric_delta(before.self_data, after.self_data, "hp", -0.08)
+        reward += self._numeric_delta(before.self_data, after.self_data, "hp", 0.08)
         reward += self._numeric_delta(before.self_data, after.self_data, "hunger", -0.01)
         reward += self._numeric_delta(before.self_data, after.self_data, "water", -0.01)
 
         reward += self._numeric_delta(before.enemy_data, after.enemy_data, "hp", -0.08)
-        reward += self._body_part_delta(before.self_data, after.self_data, -0.12)
-        reward += self._body_part_delta(before.enemy_data, after.enemy_data, 0.12)
+        reward += self._body_part_delta(before.self_data, after.self_data, 0.12)
+        reward += self._body_part_delta(before.enemy_data, after.enemy_data, -0.12)
         reward += self._skill_delta(before.self_data, after.self_data)
         reward += self._inventory_delta(before.inventory, after.inventory)
 
@@ -39,25 +39,30 @@ class RewardEngine:
             return 0.0
 
         if action == "атаковать":
+            before_enemy_hp = before.enemy_data.get("hp")
+            after_enemy_hp = after.enemy_data.get("hp")
+            if (
+                isinstance(before_enemy_hp, (int, float))
+                and isinstance(after_enemy_hp, (int, float))
+                and after_enemy_hp < before_enemy_hp
+            ):
+                return 0.25
             if after.location == "battle":
-                return 0.5
-            return 0.0
+                return 0.05
+            return -0.25
 
         if action in {"общение", "состояние (вы)", "состояние (враг)", "предметы", "снаряжение"}:
             if after.location == before.location:
-                return -0.25
-            return -0.10
+                return -0.05
+            return 0.0
 
         if action == "отступить":
             if before.location == "battle" and after.location != "battle":
-                return -1.0
-            return -0.25
+                return -0.5
+            return -0.10
 
         if action in {"назад", "🔙назад", "🔙меню"}:
-            return -0.05
-
-        if after.location != before.location:
-            return 0.10
+            return -0.02
 
         return 0.0
 
