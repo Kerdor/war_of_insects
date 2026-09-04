@@ -57,6 +57,9 @@ class Perception:
         if self._has_any(button_texts, "🏕тайники", "🗺использовать", "🗄сейфы"):
             return "inventory"
 
+        if self._has_any(button_texts, "⭐️задания", "💩кидайтесь", "🐜исследуйте в отряде", "🔥рейтинг", "⏳"):
+            return "quests"
+
         if self._has_any(button_texts, "🔘далее") and self._has_any(
             button_texts,
             "🏞с чего начать новичку?",
@@ -323,7 +326,12 @@ class Perception:
             return "medium"
         return "high"
 
-    def _level_bucket(self, value: int) -> str:
+    def _experience_bucket(self, value, maximum) -> str:
+        if maximum in (None, 0):
+            return str(value)
+        return self._ratio_bucket(value, maximum)
+
+    def _level_bucket(self, value) -> str:
         if value <= 1:
             return "1"
         if value <= 3:
@@ -334,48 +342,31 @@ class Perception:
             return "6-10"
         return "11+"
 
-    def _experience_bucket(self, value, maximum) -> str:
-        if maximum in (None, 0):
-            return "unknown"
-        ratio = value / maximum
-        if ratio >= 0.75:
-            return "near_level"
-        if ratio >= 0.50:
-            return "mid"
-        if ratio > 0.0:
-            return "early"
-        return "zero"
-
-    def _quantity_bucket(self, quantity: int) -> str:
-        if quantity <= 0:
+    def _quantity_bucket(self, value) -> str:
+        if value <= 0:
             return "0"
-        if quantity <= 2:
-            return "1-2"
-        if quantity <= 5:
-            return "3-5"
-        if quantity <= 10:
-            return "6-10"
+        if value <= 3:
+            return "1-3"
+        if value <= 10:
+            return "4-10"
         return "11+"
 
     def _number(self, value: str):
         value = value.replace(",", ".")
-        try:
-            number = float(value)
-            return int(number) if number.is_integer() else number
-        except ValueError:
-            return value
+        number = float(value)
+        return int(number) if number.is_integer() else number
 
     def _parse_buttons(self, buttons) -> list[Action]:
         result = []
-        for button in buttons:
-            if isinstance(button, Action):
-                result.append(button)
-                continue
-            if isinstance(getattr(button, "button", None), KeyboardButtonSwitchInline):
-                continue
-            text = getattr(button, "text", str(button))
-            callback_data = getattr(button, "data", None)
-            if isinstance(callback_data, bytes):
-                callback_data = callback_data.decode("utf-8", errors="replace")
-            result.append(Action(text=text, callback_data=callback_data, key=text.strip().lower()))
+        for row in buttons:
+            for button in row:
+                text = getattr(button, "text", "") or ""
+                if not text:
+                    continue
+                if isinstance(getattr(button, "button", None), KeyboardButtonSwitchInline):
+                    continue
+                callback_data = getattr(button, "data", None)
+                if isinstance(callback_data, bytes):
+                    callback_data = callback_data.decode("utf-8", errors="replace")
+                result.append(Action(text=text, callback_data=callback_data, key=text))
         return result
