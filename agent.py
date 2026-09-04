@@ -1,6 +1,8 @@
 import asyncio
 import time
 
+from telethon.tl.types import KeyboardButtonSwitchInline
+
 from learning import QLearning
 from memory import ExperienceMemory
 from perception import Perception
@@ -110,6 +112,8 @@ class Agent:
                         return
         for row in message.buttons or []:
             for button in row:
+                if isinstance(getattr(button, "button", None), KeyboardButtonSwitchInline):
+                    continue
                 if getattr(button, "text", "") == action.text:
                     await button.click()
                     return
