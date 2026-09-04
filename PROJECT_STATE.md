@@ -155,6 +155,7 @@ This tutorial is treated as official/reference knowledge rather than learned exp
 
 ### Documentation checkpoint — 2026-09-04
 
-- Added `data/knowledge/official/tutorial.md` with the built-in tutorial/onboarding knowledge collected from gameplay. Commit: `79e3d8bfaf2775506ab265889a4b686dd4407cf7`.
+- Added `data/knowledge/official/tutorial.md` with the built-in tutorial/onboarding knowledge collected from gameplay. Commit: `79e3d8bfaf2775505f55c745467bb3fd09a43a`.
 - Added `data/knowledge/official/exploration.md` with the third official handbook page covering world exploration, ranges, squads, enemies, locations, maps, taming, and events. Commit: `54f42c54964b684ffd5c80819d6a9f0f52d55fe5`.
 - Added `data/knowledge/official/items.md` with the fourth official handbook page covering items, credits, delivery, rarity, loot, trading, storage, food, potions, weapons, weapon characteristics, damage types, weight, armor interaction, and weapon classes. Commit: `2ed86b547c645acdc3d2d6e5f36270fc1273115c`.
+- Added `data/knowledge/official/trading_crafting_clans_tournaments_squad.md` with the next official handbook page covering player trades, gifts, crafting, clans, clan rating/rewards/buildings/roles/permissions, tournaments, tournament participation, and squad commands. Commit: `d379c6a4310e7863375be660865d6474a4d7ae57`.
