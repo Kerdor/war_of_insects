@@ -3,9 +3,11 @@ import time
 
 from telethon.tl.types import KeyboardButtonSwitchInline
 
+from .knowledge_retrieval import KnowledgeRetriever
 from .learning import QLearning
 from .memory import ExperienceMemory
 from .perception import Perception
+from .qwen_analyst import QwenAnalyst
 from .reward import RewardEngine
 from .stats import LearningStats
 from .strategy import StrategyMemory
@@ -13,7 +15,7 @@ from .transitions import TransitionMemory
 
 
 class Agent:
-    def __init__(self, learning=None, memory=None, transitions=None, strategy=None, stats=None):
+    def __init__(self, learning=None, memory=None, transitions=None, strategy=None, stats=None, analyst=None):
         self.perception = Perception()
         self.learning = learning or QLearning()
         self.memory = memory or ExperienceMemory()
@@ -21,6 +23,7 @@ class Agent:
         self.strategy = strategy or StrategyMemory()
         self.stats = stats or LearningStats()
         self.reward = RewardEngine()
+        self.analyst = analyst or QwenAnalyst(KnowledgeRetriever())
         self.epsilon = 0.20
         self.account_state = {}
 
@@ -85,6 +88,18 @@ class Agent:
         self.transitions.record(state_key, selected_key, next_key, reward)
         self.learning.update(state_key, selected_key, reward, next_key, next_actions)
         self.stats.record_step(account_id, reward)
+
+        if self.analyst.should_analyze(account_id):
+            asyncio.create_task(
+                self.analyst.analyze_transition(
+                    account_id,
+                    state,
+                    selected_key,
+                    next_state,
+                    reward,
+                    list(context["recent_actions"]),
+                )
+            )
 
         if self._is_terminal(next_state):
             outcome = self._outcome(next_state)
