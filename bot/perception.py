@@ -35,19 +35,15 @@ class Perception:
 
     def _detect_location(self, text: str, actions=None) -> str:
         lowered = text.lower()
-        checks = {
-            "battle": ("Каков ваш приказ?", "наносит", "Вражеские существа", "Атаковать"),
-            "exploration": ("Исследуя", "Дальность исследования", "исследовани"),
-            "profile": ("Профиль", "Уровень:", "Опыт:"),
-            "skills": ("Основное", "Сила", "Ловкость", "Атлетика"),
-            "inventory": ("Инвентарь", "Макс. вес", "Вес:"),
-            "city": ("Город",),
-        }
-        for location, markers in checks.items():
-            if sum(marker.lower() in lowered for marker in markers) >= 1:
-                return location
-
         button_texts = {action.text.strip().lower() for action in (actions or [])}
+
+        battle_signature = (
+            "каков ваш приказ?" in lowered
+            or ("вражеские существа" in lowered and "атаковать" in lowered)
+            or ("наносит" in lowered and "атаковать" in button_texts)
+        )
+        if battle_signature:
+            return "battle"
 
         if self._has_any(button_texts, "🏜 ближайшие территории", "⛰ умеренная дальность", "🌋 дальние территории", "🔘 сбор отряда"):
             return "exploration"
@@ -100,6 +96,21 @@ class Perception:
             "🗡снаряжение",
         ):
             return "main"
+
+        if "профиль" in lowered:
+            return "profile"
+
+        if "инвентарь" in lowered and ("вес:" in lowered or "макс. вес" in lowered):
+            return "inventory"
+
+        if "навыки" in lowered and any(marker in lowered for marker in ("сила", "ловкость", "атлетика", "восприятие")):
+            return "skills"
+
+        if "основное" in lowered and any(marker in lowered for marker in ("сила", "ловкость", "атлетика", "восприятие")):
+            return "skills"
+
+        if "город" in lowered and "каков ваш приказ?" not in lowered:
+            return "city"
 
         if self._has_any(button_texts, "❓помощь", "💬официальный чат", "📖справочник", "💡идеи"):
             return "help"
