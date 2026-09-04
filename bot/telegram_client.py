@@ -9,6 +9,7 @@ class GameClient:
     def __init__(self, account: AccountConfig):
         self.account = account
         self.client = TelegramClient(account.session_name, API_ID, API_HASH)
+        self.reply_keyboard_message = None
 
     async def connect(self) -> None:
         await self.client.connect()
@@ -44,6 +45,11 @@ class GameClient:
             return None
 
         for message in messages:
+            if isinstance(getattr(message, "reply_markup", None), ReplyKeyboardMarkup):
+                self.reply_keyboard_message = message
+                break
+
+        for message in messages:
             if message.buttons:
                 return message
 
@@ -53,8 +59,9 @@ class GameClient:
         messages = await self.client.get_messages(BOT_USERNAME, limit=20)
         for message in messages:
             if isinstance(getattr(message, "reply_markup", None), ReplyKeyboardMarkup):
+                self.reply_keyboard_message = message
                 return message
-        return None
+        return self.reply_keyboard_message
 
     async def get_current_buttons(self, message):
         buttons = []
