@@ -111,12 +111,23 @@ A separate AI analyst layer is planned on top of the existing Q-learning agent. 
 
 The AI analyst will not hardcode routes or bypass the self-learning architecture.
 
+### Knowledge collection for Qwen
+
+We are currently collecting game information, bot/gameplay guides, mechanics, descriptions, and other durable knowledge that will later be used as a knowledge base for the local Qwen model.
+
+Knowledge is separated into two planned categories:
+- `data/knowledge/official/` — official game information, tutorials, guides, skill descriptions, mechanics, and other trusted/reference material supplied by the game documentation;
+- `data/knowledge/learned/` — observations, hypotheses, discovered mechanics, action consequences, and other information learned by the bot during gameplay.
+
+The separation is intentional: official/reference information must not be mixed with uncertain observations learned from experience. Later, Qwen will use both sources as context for analysis and knowledge extraction while Q-learning remains responsible for autonomous action selection.
+
 ### Official game knowledge
 
 Official skill documentation is being collected separately from learned observations.
 
 - `data/knowledge/official/skills.md` created;
 - currently contains official descriptions of Strength, Agility, Athletics, Perception, Attack, Defense, Dodge, Cutting, Slashing, Blunt, Piercing, Stealth, Lockpicking, Theft, General Crafting, Weapon Forging, Armor Forging, Alchemy, Cooking, Engineering, and Medicine;
+- added official innate-skill information for the wasp: Poison and Hunter;
 - current character levels and temporary equipment/innate bonuses are not treated as permanent skill knowledge.
 
 ### Project structure commit
