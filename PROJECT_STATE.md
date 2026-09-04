@@ -1,6 +1,6 @@
 # PROJECT STATE
 
-## 2026-09-04 — Runtime fixes, self-learning loop, development runner and project structure
+## 2026-09-04 — Runtime fixes, self-learning loop, development runner, official knowledge normalization and retrieval
 
 ### Current structure
 
@@ -9,6 +9,8 @@ Application code is grouped into the `bot/` package. Official game knowledge is 
 ```text
 war_of_insects/
 ├── bot/
+│   ├── knowledge_retrieval.py
+│   └── ...
 ├── data/
 │   └── knowledge/
 │       ├── official/
@@ -64,42 +66,45 @@ Official source pages are retained as archival/context documents. The normalized
 
 ### Qwen-friendly official knowledge structure — 2026-09-04
 
-The first normalized pass was too compressed for reliable reasoning. The entire normalized topic layer has now been expanded so that the topic files contain substantive rules, conditions, effects, requirements, restrictions, examples and operational commands instead of short summaries.
-
-Current combat retrieval structure:
-- `combat/combat.md` — detailed combat model and relationships between skills, body state, equipment, effects, pursuit and outcomes;
-- `combat/damage.md` — navigation/index only;
-- `combat/damage_types.md` — detailed four damage types, mixed damage and stat relationships;
-- `combat/damage_effects.md` — bleeding, amputation, fractures and piercing;
-- `combat/armor.md` — body coverage, independent armor checks, damage calculation example and armor classes;
-- `combat/body_damage.md` — vital body parts, limbs, blood, unconsciousness, limb loss and restoration.
-
-`basics/skills.md` remains the detailed skill reference, including official descriptions, effects and training methods for ordinary core, combat, weapon, stealth/theft, crafting and science skills. The original `official/skills.md` remains the source document, including the separate innate-skill section.
-
-The rest of the normalized topic layer has also been expanded from compressed summaries into detailed retrieval documents:
-- `basics/game_overview.md`
-- `basics/status.md`
-- `basics/body.md`
-- `exploration/world.md`
-- `exploration/locations.md`
-- `items/overview.md`
-- `items/storage.md`
-- `items/food.md`
-- `items/potions.md`
-- `items/weapons.md`
-- `items/trading.md`
-- `crafting/crafting.md`
-- `clans/overview.md`
-- `clans/rating.md`
-- `clans/buildings.md`
-- `clans/roles_permissions.md`
-- `tournaments/tournaments.md`
-- `squad/squad.md`
+The entire normalized topic layer has been expanded so that topic files preserve substantive rules, conditions, effects, requirements, restrictions, exceptions and operational commands instead of short summaries.
 
 Index-oriented files remain intentionally concise:
 - `official/README.md` — map of the knowledge base;
 - `official/commands.md` — command-oriented lookup;
 - `combat/damage.md` — combat-damage navigation.
+
+### Retrieval layer — 2026-09-04
+
+Added `bot/knowledge_retrieval.py`.
+
+The retriever is dependency-free and currently lexical so it works offline and does not require an embedding service. It:
+- recursively loads Markdown from `data/knowledge/official/` and `data/knowledge/learned/`;
+- keeps source, domain, keywords and related-document metadata;
+- splits documents by Markdown headings and then into bounded chunks while preserving section context;
+- ranks chunks by query-term coverage, term density, metadata matches, exact phrase matches and source trust;
+- gives official knowledge a higher trust bonus than learned observations;
+- supports filtering by `domain` and `source`;
+- can exclude learned knowledge entirely;
+- builds bounded context suitable for sending to Qwen;
+- explicitly tells Qwen that learned observations are hypotheses and must not override explicit official rules.
+
+The public retrieval interface is:
+- `KnowledgeRetriever.search(...)` — ranked `KnowledgeHit` objects;
+- `KnowledgeRetriever.build_context(...)` — bounded source-labelled context;
+- `KnowledgeRetriever.build_qwen_prompt_context(...)` — Qwen-ready context with source precedence instructions.
+
+The design intentionally avoids hard-coding game routes. Retrieval supplies knowledge to the analyst; Q-learning remains responsible for choosing actions.
+
+### Retrieval roadmap
+
+Next integration step is the Qwen analyst layer. It should consume:
+1. current normalized game observation;
+2. retrieved official context;
+3. retrieved learned observations;
+4. recent transition/action history;
+5. reward/outcome information.
+
+The analyst should return structured knowledge candidates such as confirmed mechanics, hypotheses, action consequences, prerequisites, exceptions and confidence. It must not directly choose or execute gameplay actions.
 
 ### Retrieval document standard
 
@@ -110,43 +115,6 @@ Every substantive normalized document should:
 - use lightweight frontmatter with stable `id`, `type`, `domain`, `source`, `keywords` and `related` fields;
 - use index files only for navigation;
 - avoid replacing authoritative source details with guesses when the source is ambiguous or internally inconsistent.
-
-### Existing normalized topics
-
-- `basics/game_overview.md`
-- `basics/status.md`
-- `basics/body.md`
-- `basics/skills.md`
-- `exploration/world.md`
-- `exploration/locations.md`
-- `combat/combat.md`
-- `combat/damage.md`
-- `combat/damage_types.md`
-- `combat/damage_effects.md`
-- `combat/armor.md`
-- `combat/body_damage.md`
-- `items/overview.md`
-- `items/storage.md`
-- `items/food.md`
-- `items/potions.md`
-- `items/weapons.md`
-- `items/trading.md`
-- `crafting/crafting.md`
-- `clans/overview.md`
-- `clans/rating.md`
-- `clans/buildings.md`
-- `clans/roles_permissions.md`
-- `tournaments/tournaments.md`
-- `squad/squad.md`
-- `commands.md`
-
-### Documentation history
-
-- Tutorial knowledge: commit `79e3d8bfaf2775506ab265889a4b686dd4407cf7`.
-- Exploration source page: commit `54f42c54964b684ffd5c80819d6a9f0f52d55fe5`.
-- Items source page: commit `2ed86b547c645acdc3d2d6e5f36270fc1273115c`.
-- Trading/crafting/clans/tournaments/squad source page: commit `d379c6a4310e7863375be660865d6474a4d7ae57`.
-- Complete normalized knowledge expansion: current documentation update sequence ending at commit `f749abbe9788279c9b52411c4e9202c8d18841d1`.
 
 ### Design decision
 
