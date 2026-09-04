@@ -3,7 +3,6 @@ import time
 
 from telethon.tl.types import KeyboardButtonSwitchInline
 
-from .knowledge_retrieval import KnowledgeRetriever
 from .learning import QLearning
 from .memory import ExperienceMemory
 from .perception import Perception
@@ -12,6 +11,7 @@ from .reward import RewardEngine
 from .stats import LearningStats
 from .strategy import StrategyMemory
 from .transitions import TransitionMemory
+from .knowledge_retrieval import KnowledgeRetriever
 
 
 class Agent:
@@ -217,23 +217,26 @@ class Agent:
             "🔘сбор отряда",
         }
 
+        action_texts = {action.text.strip().lower() for action in safe}
+        battle_count = len(action_texts & battle_actions)
+        skill_count = len(action_texts & skill_actions)
+        equipment_count = len(action_texts & equipment_actions)
+
         if state.location == "skills":
-            filtered = [
-                action for action in safe
-                if action.text.strip().lower() in skill_actions
-                or action.text.strip().lower() in battle_actions
-            ]
+            filtered = [action for action in safe if action.text.strip().lower() in skill_actions]
             if filtered:
                 return filtered
+            if battle_count >= 5 and equipment_count == 0:
+                return [action for action in safe if action.text.strip().lower() in battle_actions]
+            return [action for action in safe if action.text.strip().lower() == "🔙назад"]
 
         if state.location == "equipment":
-            filtered = [
-                action for action in safe
-                if action.text.strip().lower() in equipment_actions
-                or action.text.strip().lower() in battle_actions
-            ]
+            filtered = [action for action in safe if action.text.strip().lower() in equipment_actions]
             if filtered:
                 return filtered
+            if battle_count >= 5:
+                return [action for action in safe if action.text.strip().lower() in battle_actions]
+            return [action for action in safe if action.text.strip().lower() == "🔙назад"]
 
         if state.location == "exploration":
             filtered = [
@@ -243,7 +246,7 @@ class Agent:
             if filtered:
                 return filtered
 
-        if state.location == "battle":
+        if state.location == "battle" or (battle_count >= 5 and skill_count == 0 and equipment_count == 0):
             filtered = [
                 action for action in safe
                 if action.text.strip().lower() in battle_actions
@@ -266,6 +269,12 @@ class Agent:
             ]
             if navigation:
                 return navigation
+
+        if len(safe) == 1 and safe[0].text.strip().lower() in {"назад", "🔙назад", "🔙меню"}:
+            return safe
+
+        if "назад" in action_texts and len(action_texts) <= 3:
+            return [action for action in safe if action.text.strip().lower() in {"назад", "🔙назад", "🔙меню"}]
 
         return safe
 
