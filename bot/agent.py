@@ -154,6 +154,20 @@ class Agent:
             return [action for action in safe if action.text.strip().lower() == "🔙назад"]
 
         if state.location == "quests":
+            main_actions = {
+                "🏜исследовать",
+                "⭐️задания",
+                "🗞события",
+                "🐾насекомое",
+                "🍗состояние",
+                "💰инвентарь",
+                "⚔навыки",
+                "🗡снаряжение",
+            }
+            main = [action for action in safe if action.text.strip().lower() in main_actions]
+            if main:
+                explore = [action for action in main if action.text.strip().lower() == "🏜исследовать"]
+                return explore or main
             return [action for action in safe if action.text.strip().lower() in {"🔙назад", "🔙меню"}]
 
         action_texts = {action.text.strip().lower() for action in safe}
