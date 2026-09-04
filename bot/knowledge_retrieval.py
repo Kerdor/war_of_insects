@@ -39,8 +39,8 @@ class KnowledgeRetriever:
 
     Official documents are trusted reference material. Learned documents are
     intentionally kept separate and receive a lower default trust score.
-    Retrieval is lexical for now so it works offline and without an embedding
-    service. The interface is deliberately stable for a future Qwen analyst.
+    Conflicted learned documents are excluded from normal retrieval so an
+    unresolved contradiction cannot silently influence the analyst as a rule.
     """
 
     STOPWORDS = frozenset(
@@ -124,12 +124,7 @@ class KnowledgeRetriever:
         blocks: list[str] = []
         used = 0
         for hit in hits:
-            if hit.chunk.document.source == "official":
-                source_label = "OFFICIAL"
-            elif hit.chunk.document.status == "conflicted":
-                source_label = "LEARNED-CONFLICT"
-            else:
-                source_label = "LEARNED"
+            source_label = "OFFICIAL" if hit.chunk.document.source == "official" else "LEARNED"
             block = (
                 f"[SOURCE={source_label}]\n"
                 f"[STATUS={hit.chunk.document.status}]\n"
@@ -153,7 +148,7 @@ class KnowledgeRetriever:
         top_k: int = 5,
         max_chars: int = 9000,
         domain: str | None = None,
-        include_conflicted: bool = True,
+        include_conflicted: bool = False,
     ) -> str:
         context = self.build_context(
             query,
@@ -169,9 +164,7 @@ class KnowledgeRetriever:
             "Use the retrieved knowledge as reference context. Official knowledge "
             "is trusted documentation; learned knowledge consists of observations "
             "and hypotheses and must not override explicit official rules. "
-            "LEARNED-CONFLICT entries are unresolved contradictory observations: "
-            "do not treat either side as established truth and do not resolve the "
-            "conflict by guessing.\n\n"
+            "Conflicted learned claims are excluded unless explicitly requested.\n\n"
             + context
         )
 
@@ -186,7 +179,6 @@ class KnowledgeRetriever:
             metadata, body = self._parse_frontmatter(text)
             domain = metadata.get("domain") or self._infer_domain(relative)
             title = metadata.get("id") or path.stem
-            status = metadata.get("status", "established" if source == "official" else "hypothesis")
             keywords = tuple(self._split_metadata(metadata.get("keywords", "")))
             related = tuple(self._split_metadata(metadata.get("related", "")))
             document = KnowledgeDocument(
@@ -194,7 +186,7 @@ class KnowledgeRetriever:
                 title=title,
                 domain=domain,
                 source=metadata.get("source", source),
-                status=status,
+                status=metadata.get("status", "unknown"),
                 keywords=keywords,
                 related=related,
                 text=body,
@@ -231,7 +223,6 @@ class KnowledgeRetriever:
                         [
                             document.title,
                             document.domain,
-                            document.status,
                             " ".join(document.keywords),
                             " ".join(document.related),
                             section_heading,
@@ -302,8 +293,6 @@ class KnowledgeRetriever:
         metadata_bonus += len(matched & metadata_terms) * 0.75
 
         trust_bonus = 1.0 if chunk.document.source == "official" else 0.35
-        if chunk.document.status == "conflicted":
-            trust_bonus = -1.0
         return 6.0 * coverage + 2.0 * math.sqrt(density) + exact_bonus + metadata_bonus + trust_bonus
 
     @classmethod
