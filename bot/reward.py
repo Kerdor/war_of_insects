@@ -1,5 +1,5 @@
 class RewardEngine:
-    def calculate(self, before, after, action: str = "") -> float:
+    def calculate(self, before, after, action: str = "", stagnation_steps: int = 0) -> float:
         reward = 0.0
         before_text = before.raw_text.lower()
         after_text = after.raw_text.lower()
@@ -30,6 +30,9 @@ class RewardEngine:
 
         if after.events and after.events != before.events:
             reward += 1.0
+
+        if stagnation_steps > 0 and before.location == after.location:
+            reward -= min(stagnation_steps, 5) * 0.10
 
         reward += self._action_shaping(before, after, action_text)
         return reward
