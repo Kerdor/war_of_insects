@@ -1,37 +1,37 @@
 # PROJECT STATE
 
-## 2026-09-04 — Per-account enable flags
+## 2026-09-04 — Explicit per-account Telegram authorization
 
-Added independent account enable/disable control for up to three Telegram accounts.
+Telegram authorization was changed from Telethon `start(phone=...)` to an explicit sequential login flow.
 
-### Configuration
+### Runtime behavior
 
-Each account now supports:
+`telegram_client.py` now:
+- connects the session first;
+- skips code entry when the session is already authorized;
+- explicitly calls `send_code_request()` for a new session;
+- prints when the login code request is sent;
+- accepts the Telegram code for the specific account/session;
+- handles Telegram 2FA when requested.
+
+`main.py` still:
+- starts only accounts with `enabled=true`;
+- authorizes enabled accounts sequentially;
+- runs enabled accounts concurrently after connection.
+
+This makes it possible to distinguish a real Telegram code-request/delivery problem from a local session/login-flow problem.
+
+### Account enable flags
+
+Each account supports:
 - `ACCOUNT_1_ENABLED=true/false`
 - `ACCOUNT_2_ENABLED=true/false`
 - `ACCOUNT_3_ENABLED=true/false`
 
 Default is `true` when the variable is omitted.
 
-### Runtime behavior
-
-`main.py` now:
-- starts only accounts with `enabled=true`;
-- keeps Telegram authorization/connect sequence sequential;
-- runs enabled accounts concurrently after connection;
-- prints the enabled accounts at startup.
-
 ### Current commits
 
 - Config: `7d7b6ca139555a6dd6074d8946ff15dce765c4c0`
 - Main: `dd7b50b30fcf40d9fcfcd4c6cc869eecac10dcae`
-
-### Example `.env`
-
-```env
-ACCOUNT_1_ENABLED=true
-ACCOUNT_2_ENABLED=true
-ACCOUNT_3_ENABLED=false
-```
-
-To temporarily disable account 3, set `ACCOUNT_3_ENABLED=false`; its phone/session values can remain configured.
+- Telegram authorization: `02833f912879a0ed839397d0a9ae66d54fe32af0`
