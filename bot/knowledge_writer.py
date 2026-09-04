@@ -81,12 +81,17 @@ class KnowledgeWriter:
                 "claim": claim,
                 "domain": self._slug(candidate.get("domain", "general")) or "general",
                 "type": self._slug(candidate.get("type", "observation")) or "observation",
+                "mechanic_key": self._slug(candidate.get("mechanic_key", "")),
                 "observations": [],
                 "accounts": [],
                 "confidence": 0.0,
                 "status": "hypothesis",
+                "conflicts": [],
             },
         )
+
+        if not record.get("mechanic_key"):
+            record["mechanic_key"] = self._slug(candidate.get("mechanic_key", ""))
 
         observation_id = observation_id or hashlib.sha1(
             f"{account_id}|{claim}|{time.time_ns()}".encode("utf-8")
@@ -106,19 +111,51 @@ class KnowledgeWriter:
         if account_id not in record["accounts"]:
             record["accounts"].append(account_id)
 
+        relation = str(candidate.get("relation", "new")).strip().lower()
+        if relation == "contradicts":
+            self._mark_conflicts(record, candidate)
+
         observations = record["observations"]
         average_confidence = sum(item["confidence"] for item in observations) / max(1, len(observations))
         record["confidence"] = min(0.99, max(average_confidence, confidence))
 
         independent_accounts = len(record["accounts"])
         observation_count = len(observations)
-        if observation_count >= 3 and independent_accounts >= 2 and record["confidence"] >= 0.70:
+        if record.get("conflicts"):
+            record["status"] = "conflicted"
+        elif observation_count >= 3 and independent_accounts >= 2 and record["confidence"] >= 0.70:
             record["status"] = "confirmed"
         elif observation_count >= 2 and record["confidence"] >= 0.80:
             record["status"] = "candidate"
         else:
             record["status"] = "hypothesis"
         return record
+
+    def _mark_conflicts(self, record: dict[str, Any], candidate: dict[str, Any]) -> None:
+        targets = self._normalize_list(candidate.get("conflicts_with", []))
+        mechanic_key = record.get("mechanic_key", "")
+        if not targets or not mechanic_key:
+            return
+
+        for target in targets:
+            target_digest = hashlib.sha1(target.lower().encode("utf-8")).hexdigest()[:12]
+            target_record = self.records.get(target_digest)
+            if not target_record or target_record is record:
+                continue
+            if target_record.get("mechanic_key") != mechanic_key:
+                continue
+            if target_digest not in record["conflicts"]:
+                record["conflicts"].append(target_digest)
+            if record.get("claim") not in target_record.setdefault("conflicting_claims", []):
+                target_record["conflicting_claims"].append(record["claim"])
+            if digest := self._digest_for_record(record):
+                if digest not in target_record.setdefault("conflicts", []):
+                    target_record["conflicts"].append(digest)
+            target_record["status"] = "conflicted"
+
+    def _digest_for_record(self, record: dict[str, Any]) -> str:
+        claim = str(record.get("claim", "")).strip()
+        return hashlib.sha1(claim.lower().encode("utf-8")).hexdigest()[:12] if claim else ""
 
     def _evidence_lines(self, record: dict[str, Any]) -> str:
         lines = []
@@ -153,6 +190,9 @@ class KnowledgeWriter:
         related_yaml = "\n".join(f"  - {self._yaml_value(item)}" for item in related if str(item).strip())
         if not related_yaml:
             related_yaml = "  []"
+        conflicts_yaml = "\n".join(f"  - {self._yaml_value(item)}" for item in record.get("conflicts", []))
+        if not conflicts_yaml:
+            conflicts_yaml = "  []"
 
         sections = [
             f"# {claim}",
@@ -165,6 +205,13 @@ class KnowledgeWriter:
             f"**Recorded at:** `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}`",
             "",
         ]
+        if record.get("conflicts"):
+            sections.extend([
+                "## Conflict",
+                "",
+                "This learned claim conflicts with another learned claim sharing the same mechanic key. Neither claim is treated as authoritative until additional evidence resolves the conflict.",
+                "",
+            ])
         if conditions:
             sections.extend(["## Conditions", "", conditions, ""])
         if consequences:
@@ -182,11 +229,14 @@ class KnowledgeWriter:
             f"confidence: {confidence:.2f}\n"
             f"observations: {len(record['observations'])}\n"
             f"accounts: {len(record['accounts'])}\n"
+            f"mechanic_key: {self._yaml_value(record.get('mechanic_key', ''))}\n"
             "keywords:\n"
             f"  - {self._yaml_value(domain)}\n"
             f"  - {self._yaml_value(kind)}\n"
             "related:\n"
             f"{related_yaml}\n"
+            "conflicts:\n"
+            f"{conflicts_yaml}\n"
             "---\n\n"
             + "\n".join(sections)
         )
