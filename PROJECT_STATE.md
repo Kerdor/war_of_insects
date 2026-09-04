@@ -48,7 +48,7 @@ A runtime test showed two independent Qwen-side failures:
 
 `bot/qwen_analyst.py` has tolerant result parsing: it first parses the complete response as JSON and, when that fails, attempts to parse the outermost JSON object from the returned content. Invalid/unrecoverable output still produces a zero learning signal instead of stopping the agent.
 
-The existing request timeout and analysis frequency were intentionally not changed in this fix. The Qwen analysis remains asynchronous and cannot directly select or execute actions.
+The existing request timeout and analysis frequency were intentionally not changed in this fix. The Qwen analysis remains asynchronous and cannot directly select or execute gameplay actions.
 
 ### Qwen knowledge persistence API fix — 2026-09-05
 
@@ -110,6 +110,31 @@ Commits:
 - `a629829` — fix Telethon `MessageButton` handling in `GameClient`;
 - `950ebcc` — fix flat `MessageButton` handling in `Perception`.
 
+### Secondary-menu `Далее` priority bug — 2026-09-05
+
+The next runtime showed an actual navigation-policy bug:
+
+```text
+State: secondary_menu | Actions: 🔘Далее
+Selected: 🔘Далее
+State: help | Actions: 🔙Назад
+Selected: 🔙Назад
+State: secondary_menu | Actions: 🔘Далее
+```
+
+`_selectable_actions()` had a global `🔘Далее` rule placed before the `secondary_menu` rule. Therefore, even when the secondary menu contained its real menu buttons and `🔙Меню`, the generic `Далее` rule overrode the dedicated secondary-menu navigation policy. This produced a loop through `secondary_menu -> help -> secondary_menu` instead of returning to the main game menu.
+
+The fix moves `secondary_menu` and `help` handling before the generic `🔘Далее` rule:
+- `secondary_menu` now selects only `🔙Меню`;
+- `help` now selects only `🔙Назад`;
+- `tutorial` retains priority for `🔘Далее`;
+- the generic `🔘Далее` fallback is used only after these state-specific rules.
+
+The same change also hardens `_click()` and `_flatten_buttons()` to accept both Telethon button-row structures and flat `MessageButton` objects.
+
+Commit:
+- `0425b69` — fix secondary-menu navigation priority and flat button clicking.
+
 ### Runtime connection issue — 2026-09-04
 
 A local run with `C:\Python314\python.exe` did not reach the `Connected: auth/kerdor` log line. Telethon repeatedly reported:
@@ -138,4 +163,5 @@ Commits:
 - `5f94d53` — add stagnation penalty to reward learning;
 - `20ea10e` — penalize stagnation and ignore unchanged messages;
 - `a629829` — fix Telethon `MessageButton` keyboard handling;
-- `950ebcc` — fix flat `MessageButton` handling in Perception.
+- `950ebcc` — fix flat `MessageButton` handling in Perception;
+- `0425b69` — fix secondary-menu navigation priority and flat button clicking.
