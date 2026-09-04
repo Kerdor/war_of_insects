@@ -1,8 +1,8 @@
 # PROJECT STATE
 
-## 2026-09-04 — Runtime error fixes
+## 2026-09-04 — Runtime error fixes and reply-keyboard execution
 
-Fixed runtime errors found during multi-account startup/game loop testing.
+Fixed runtime errors and the first no-action issue found during multi-account startup/game loop testing.
 
 ### Fixes
 
@@ -16,7 +16,8 @@ Fixed runtime errors found during multi-account startup/game loop testing.
 `agent.py` / `perception.py`:
 - fixed `Start parameter invalid (caused by StartBotRequest)` caused by Telegram `KeyboardButtonSwitchInline` buttons being treated as normal game actions;
 - SwitchInline buttons are now ignored by perception and skipped by the action click fallback;
-- normal callback and reply-keyboard buttons remain supported.
+- reply-keyboard game actions are now sent as normal messages through the account client;
+- added concise runtime logging for detected state, available actions, selected action, and failed clicks.
 
 ### Multi-account behavior
 
@@ -33,3 +34,4 @@ Fixed runtime errors found during multi-account startup/game loop testing.
 - Learning transition unpack fix: `244e0ab7c7ee816fdd73d88522dfa6ceaa8a6164`
 - Agent SwitchInline handling: `9fdc33b8d1c5223a736ac703c7231597366c41f5`
 - Perception SwitchInline filtering: `f52e13d661f5d4840efeafd4b6f4f170a128cc7f`
+- Reply-keyboard action execution: `62c0376f91961d48c4f83745fd8a46c8ce4da2a0`
