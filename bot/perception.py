@@ -37,6 +37,13 @@ class Perception:
         lowered = text.lower()
         button_texts = {action.text.strip().lower() for action in (actions or [])}
 
+        if any(marker in lowered for marker in (
+            "в данный момент ваше насекомое занято",
+            "насекомое отправилось на исследование",
+            "ожидайте, пока оно найдет",
+        )):
+            return "busy"
+
         battle_signature = (
             "каков ваш приказ?" in lowered
             or ("вражеские существа" in lowered and "атаковать" in lowered)
