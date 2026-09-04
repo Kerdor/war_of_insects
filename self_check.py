@@ -1,4 +1,3 @@
-import asyncio
 import tempfile
 from pathlib import Path
 
@@ -38,8 +37,7 @@ def check_knowledge_writer() -> None:
         records = writer.records
         statuses = {record.get("status") for record in records.values()}
         if statuses != {"conflicted"}:
-            raise AssertionError(f"Contradiction check failed: statuses={statuses}
-")
+            raise AssertionError(f"Contradiction check failed: statuses={statuses}")
 
 
 def check_retrieval() -> None:
@@ -108,4 +106,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(asyncio.to_thread(main))
+    main()
