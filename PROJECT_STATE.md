@@ -117,6 +117,7 @@ Official skill documentation is being collected separately from learned observat
 
 - `data/knowledge/official/skills.md` created;
 - currently contains official descriptions of Strength, Agility, Athletics, Perception, Attack, Defense, Dodge, Cutting, Slashing, Blunt, and Piercing;
+- skill categories/names for Stealth, Lockpicking, Theft, General Crafting, Weapon Forging, Armor Forging, Alchemy, Cooking, Engineering, and Medicine are recorded as pending documentation;
 - current character levels and temporary equipment/innate bonuses are not treated as permanent skill knowledge.
 
 ### Project structure commit
