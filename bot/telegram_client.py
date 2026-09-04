@@ -71,6 +71,9 @@ class GameClient:
         for row in message.buttons or []:
             buttons.extend(row)
 
+        if buttons:
+            return buttons
+
         reply_message = await self.get_reply_keyboard_message()
         if reply_message is not None and reply_message.id != message.id:
             for row in reply_message.buttons or []:
