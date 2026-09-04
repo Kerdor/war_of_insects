@@ -96,6 +96,17 @@ Commits:
 - `5f94d53` — add stagnation penalty to reward learning;
 - `20ea10e` — penalize stagnation and ignore unchanged messages.
 
+### Telegram keyboard compatibility fix — 2026-09-05
+
+The local runtime failed repeatedly with:
+
+`'MessageButton' object is not iterable`
+
+The cause was `GameClient.get_current_buttons()` assuming every item in `message.buttons` was a row/list. Telethon can expose a flat `MessageButton` object in this path. The method now accepts both nested rows and individual `MessageButton` objects, preserving the existing button-selection logic.
+
+Commit:
+- `a629829` — fix MessageButton keyboard handling.
+
 ### Runtime connection issue — 2026-09-04
 
 A local run with `C:\Python314\python.exe` did not reach the `Connected: auth/kerdor` log line. Telethon repeatedly reported:
@@ -123,4 +134,4 @@ Commits:
 - `4f62a64` — fix KnowledgeWriter API call;
 - `5f94d53` — add stagnation penalty to reward learning;
 - `20ea10e` — penalize stagnation and ignore unchanged messages;
-- this `PROJECT_STATE.md` update records the latest navigation-learning fix.
+- `a629829` — fix Telethon `MessageButton` keyboard handling.
