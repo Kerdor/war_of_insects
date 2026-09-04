@@ -46,7 +46,7 @@ war_of_insects/
 
 The agent uses perception/state normalization, Q-learning, transition memory, strategy memory, experience memory, reward calculation, per-account runtime context and learning statistics.
 
-Q-learning remains responsible for autonomous action selection. Qwen observes gameplay and extracts durable knowledge instead of hardcoding routes.
+Q-learning remains responsible for autonomous action selection. Qwen observes gameplay and evaluates observed outcomes instead of hardcoding routes or directly executing commands.
 
 ### Knowledge architecture
 
@@ -75,26 +75,44 @@ It:
 
 ### Qwen analyst layer
 
-`bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. It now analyzes **every completed transition by default** (`QWEN_ANALYSIS_INTERVAL=1`) whenever Qwen is enabled and an API key is configured. Analysis runs in a background task and does not block the gameplay loop.
+`bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. Qwen analysis is configured for every completed transition by default (`QWEN_ANALYSIS_INTERVAL=1`) whenever Qwen is enabled and an API key is present.
 
 The analyst receives:
 - before/after normalized state;
 - selected action;
-- reward;
+- local reward;
 - recent actions;
 - retrieved official/learned knowledge, including conflicted learned entries for investigation.
 
-Qwen returns structured candidates only. It does not select or execute gameplay actions.
+Qwen returns:
+- structured durable-knowledge candidates;
+- a bounded `learning_signal` from `-5.0` to `+5.0` evaluating the observed outcome only.
 
-Important runtime behavior:
-- Qwen does not need a separate local process when using the configured OpenAI-compatible DashScope endpoint; the agent calls the remote API directly.
-- If `QWEN_ENABLED` is false or `QWEN_API_KEY` is empty, gameplay continues normally and Qwen analysis is simply skipped.
-- Therefore the current bot can run without Qwen, but it will not receive Qwen-derived knowledge until the API is enabled and configured.
+Qwen does not select or execute gameplay actions.
 
-Candidate metadata includes:
-- `mechanic_key` — stable identifier for the underlying mechanic;
-- `relation` — `new`, `supports`, `contradicts` or `unclear`;
-- `conflicts_with` — exact learned claim text when a material contradiction is identified.
+Qwen does not require a separate local process. The existing analyst calls the configured OpenAI-compatible DashScope endpoint directly. If `QWEN_ENABLED=false` or `QWEN_API_KEY` is empty, the agent continues without Qwen analysis.
+
+### Qwen → Q-learning feedback
+
+The local reward path remains authoritative as the immediate baseline:
+
+`state → action → next_state → local reward → normal Q update`
+
+After that update, an enabled Qwen analyst evaluates the same completed transition asynchronously. If its bounded `learning_signal` is non-zero, `Agent` performs a second Q-learning update using:
+
+`adjusted_reward = local reward + learning_signal`
+
+The signal is clamped to `[-5.0, +5.0]`. A disabled, failed, malformed or uncertain Qwen response contributes `0.0`, so Qwen cannot halt gameplay or corrupt the local learning path.
+
+This makes Qwen an evaluator/teacher rather than a policy: Q-learning still chooses the next action.
+
+### Qwen transition delivery
+
+Every eligible transition creates an asynchronous analysis task. Per-account Qwen calls are serialized with an asyncio lock and are no longer silently discarded merely because a previous Qwen request is still running.
+
+This means the intended learning pipeline is now:
+
+`Perception → Q-learning action → Telegram → next state → local reward/Q update → Qwen analysis → optional Qwen learning signal → second Q update + knowledge storage`
 
 ### Repeated-evidence confirmation
 
@@ -125,7 +143,7 @@ Different conditions or exceptions are not automatically treated as contradictio
 
 ### Qwen integration correction
 
-The Qwen analyst now uses the current retrieval API correctly and explicitly requests conflicted knowledge so it can compare new observations against unresolved claims. Normal agent retrieval still excludes those claims.
+The Qwen analyst uses the current retrieval API correctly and explicitly requests conflicted knowledge so it can compare new observations against unresolved claims. Normal agent retrieval still excludes those claims.
 
 ### Local preflight
 
@@ -203,35 +221,43 @@ The Q-learning algorithm itself was not modified. This layer only prevents persi
 
 ### Qwen every-transition activation — 2026-09-04
 
-The runtime Q-learning file showed many visits but almost all learned Q-values remained `0.0`. The current `RewardEngine` and `QLearning.update()` path confirms that Q-values only change when the calculated reward or future Q-value is non-zero. Qwen was previously configured to analyze only every 10th completed transition.
+The Q-learning file showed many visits but almost all learned Q-values remained `0.0`. The local `RewardEngine` and `QLearning.update()` path confirms that Q-values remain zero when both the calculated reward and future Q-values are zero.
 
-Change applied:
-- `QWEN_ANALYSIS_INTERVAL` default changed from `10` to `1`;
-- when Qwen is enabled, every completed transition now schedules an asynchronous analyst call;
-- no gameplay action-selection authority was given to Qwen;
-- Qwen remains a learning/knowledge analysis layer, while Q-learning remains the action selector.
+The Qwen analyst was previously configured to analyze only every 10th completed transition. That was changed so the default interval is `1`.
 
-This does **not** require a separate local Qwen process. The existing analyst uses the configured OpenAI-compatible DashScope API. Without `QWEN_ENABLED=true` and a valid `QWEN_API_KEY`, the new every-transition path remains inactive by design.
+### Qwen learning feedback — 2026-09-04
+
+The first Qwen change only increased analysis frequency. It did not yet make Qwen materially participate in learning. That gap is now corrected.
+
+Implemented:
+- Qwen analyzes every completed transition by default when enabled;
+- Qwen returns a bounded evidence-based `learning_signal` in addition to knowledge candidates;
+- `Agent` logs the local reward and Q value immediately after the normal local update;
+- Qwen analysis runs in the background and, when it returns a non-zero signal, performs an additional Q-learning update for that same transition;
+- Qwen requests are serialized per account rather than silently skipped while another request is running;
+- malformed/failed/disabled Qwen analysis is neutral (`0.0`) and does not interrupt gameplay;
+- runtime logging now exposes `Reward`, `Q`, `Qwen learning signal`, and `Qwen-adjusted reward`.
 
 ### Current launch boundary
 
-The next local run should verify the context-aware action filtering and, when credentials are configured, the every-transition Qwen analyst.
+The next local run should verify the context-aware action filtering, local reward path and Qwen feedback path.
 
 Recommended order:
-1. let `dev_runner.py` pull the latest commit and restart automatically;
+1. let `dev_runner.py` pull the latest commits and restart automatically;
 2. run with one enabled account;
 3. verify skills/equipment/exploration/battle screens expose only context-relevant actions;
 4. verify the agent no longer jumps from a submenu into `⭐️Задания`, `🏆Турнир`, `🏪Лавка` or similar global actions merely because those buttons are present;
 5. verify payment/purchase/discard actions are never selected autonomously;
 6. verify battle control screens are recognized or at least filtered to battle actions;
-7. verify real gameplay state → action → next state → reward → Q-learning flow;
-8. if Qwen credentials are available, set `QWEN_ENABLED=true` and verify one analyst request per completed transition and learned output;
-9. inspect whether rewards are non-zero and whether Q-values begin moving away from `0.0`;
-10. only then enable additional accounts and long autonomous runs.
+7. verify every transition prints a non-ambiguous local `Reward` and `Q` line;
+8. enable Qwen and verify `Qwen learning signal` appears for completed transitions;
+9. verify non-zero Qwen signals produce `Qwen-adjusted reward` and move the Q-value;
+10. inspect `data/knowledge/learned/` for durable observations produced by Qwen;
+11. only then enable additional accounts and long autonomous runs.
 
 ### Current learning boundary
 
-Q-learning still owns action selection. Qwen is an asynchronous observation/knowledge-extraction subsystem. Retrieval supplies context; writer persists learned hypotheses and evidence. Confirmed learned knowledge does not become official and does not directly override Q-learning.
+Q-learning owns action selection. Qwen is an asynchronous evaluator/teacher and knowledge-extraction subsystem. Retrieval supplies context; writer persists learned hypotheses and evidence. Confirmed learned knowledge does not become official and does not directly override Q-learning.
 
 ### Roadmap after the navigation fix
 
