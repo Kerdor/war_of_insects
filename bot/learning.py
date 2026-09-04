@@ -59,7 +59,10 @@ class QLearning:
             "values": self.values,
             "visits": self.visits,
         }
-        self.path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        self.path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     def _load(self) -> None:
         if not self.path.exists():
