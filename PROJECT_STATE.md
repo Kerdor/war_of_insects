@@ -1,37 +1,28 @@
 # PROJECT STATE
 
-## 2026-09-04 — Explicit per-account Telegram authorization
+## 2026-09-04 — Runtime error fixes
 
-Telegram authorization was changed from Telethon `start(phone=...)` to an explicit sequential login flow.
+Fixed two runtime errors found during multi-account startup/game loop testing.
 
-### Runtime behavior
+### Fixes
 
-`telegram_client.py` now:
-- connects the session first;
-- skips code entry when the session is already authorized;
-- explicitly calls `send_code_request()` for a new session;
-- prints when the login code request is sent;
-- accepts the Telegram code for the specific account/session;
-- handles Telegram 2FA when requested.
+`learning.py`:
+- fixed unpacking of `TransitionMemory.predict()` result;
+- transition prediction returns `(count, next_state, average_reward)`, and all three values are now unpacked correctly.
 
-`main.py` still:
-- starts only accounts with `enabled=true`;
-- authorizes enabled accounts sequentially;
-- runs enabled accounts concurrently after connection.
+`main.py`:
+- fixed cleanup check from nonexistent `GameClient.is_connected()` to the underlying Telethon client's `is_connected()`.
 
-This makes it possible to distinguish a real Telegram code-request/delivery problem from a local session/login-flow problem.
+### Multi-account behavior
 
-### Account enable flags
-
-Each account supports:
-- `ACCOUNT_1_ENABLED=true/false`
-- `ACCOUNT_2_ENABLED=true/false`
-- `ACCOUNT_3_ENABLED=true/false`
-
-Default is `true` when the variable is omitted.
+- Enabled accounts still authorize sequentially.
+- Already authorized sessions skip code entry.
+- Enabled accounts run concurrently after authorization.
+- Account enable flags remain supported through `ACCOUNT_N_ENABLED=true/false`.
 
 ### Current commits
 
 - Config: `7d7b6ca139555a6dd6074d8946ff15dce765c4c0`
-- Main: `dd7b50b30fcf40d9fcfcd4c6cc869eecac10dcae`
 - Telegram authorization: `02833f912879a0ed839397d0a9ae66d54fe32af0`
+- Main runtime cleanup fix: `7e66f63fa941b1c5fad937431c6fa7c60585a342`
+- Learning transition unpack fix: `244e0ab7c7ee816fdd73d88522dfa6ceaa8a6164`
