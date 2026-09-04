@@ -73,6 +73,21 @@ class Perception:
         ):
             return "tutorial"
 
+        if self._has_any(button_texts, "🔙меню") and self._has_any(
+            button_texts,
+            "🏕тайник",
+            "📦доставка",
+            "📝инсектарий",
+            "🏆турнир",
+            "💵кредиты",
+            "🎁бонус #1",
+            "🎁бонус #2",
+            "🎁бонус #3",
+            "🏪лавка",
+            "🕷рефералы",
+        ):
+            return "secondary_menu"
+
         if self._has_any(
             button_texts,
             "🏜исследовать",
