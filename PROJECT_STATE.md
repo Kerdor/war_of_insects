@@ -54,9 +54,20 @@ The existing request timeout and analysis frequency were intentionally not chang
 
 Runtime logs showed the game's secondary menu was classified as `unknown` even when its buttons were clearly identifiable, for example `🔙Меню`, `🏕Тайник`, `📦Доставка`, `📝Инсектарий`, `🏆Турнир`, `💵Кредиты`, bonus buttons, `🏪Лавка` and `🕷Рефералы`.
 
-`bot/perception.py` now detects this screen as `secondary_menu` when `🔙Меню` is present together with one of the known secondary-menu entries.
+`bot/perception.py` detects this screen as `secondary_menu` when `🔙Меню` is present together with one of the known secondary-menu entries.
 
-This activates the existing `Agent` safety rule for `secondary_menu`, which exposes only `🔙Меню` for selection instead of allowing the Q-learning layer to randomly click secondary-menu destinations while the policy is still untrained.
+### Battle/submenu button filtering hardening — 2026-09-04
+
+Runtime logs also showed that Telethon can expose stale battle reply-keyboard buttons together with a submenu's actual buttons. This caused the untrained Q-learning policy to select unrelated controls such as `Состояние (Вы)`, `Предметы` or `Снаряжение` while the agent was on a submenu.
+
+`bot/agent.py` now:
+- recognizes a complete battle-button signature when perception is ambiguous;
+- keeps battle actions available on an actually ambiguous battle screen;
+- prevents stale battle buttons from being selectable on `skills` and `equipment` screens when their own submenu actions are present;
+- falls back to `Назад`/`🔙Назад`/`🔙Меню` on ambiguous navigation-only screens;
+- avoids treating a small ambiguous submenu as a free-for-all action set.
+
+The change is limited to action filtering; Q-learning remains the action-selection layer and Qwen remains an evaluator.
 
 ### Runtime connection issue — 2026-09-04
 
@@ -83,4 +94,5 @@ Before the next run, update the local Python environment from `requirements.txt`
 Commits:
 - `43b98b1` — detect the game's secondary menu as `secondary_menu`;
 - `0d24b95` — make Qwen JSON result parsing tolerant of wrapper text/JSON extraction failures;
-- this `PROJECT_STATE.md` update records both runtime fixes.
+- `d5ff7a4` — harden Agent action filtering for stale/ambiguous submenu buttons;
+- this `PROJECT_STATE.md` update records the latest navigation-safety fix.
