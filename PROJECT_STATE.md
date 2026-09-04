@@ -151,34 +151,19 @@ The generic `🔘Далее` fallback was removed. This prevents Q-learning from
 Commit:
 - `2c89268` — make navigation states deterministic instead of exploratory.
 
-### Runtime connection issue — 2026-09-04
+### Main/quests keyboard misclassification — 2026-09-05
 
-A local run with `C:\Python314\python.exe` did not reach the `Connected: auth/kerdor` log line. Telethon repeatedly reported:
+The next runtime showed:
 
-`Server closed the connection: 0 bytes read on a total of 8 expected bytes`
+```text
+State: secondary_menu | Actions: 🔙Меню
+Selected: 🔙Меню
+No safe actions detected | State: quests | Buttons: 9
+```
 
-The message is emitted by Telethon's MTProto connection layer and is known to occur when the Telegram server closes a TCP connection; it is not evidence of a Qwen or agent-state failure.
+The cause is that the main keyboard contains `⭐️Задания`, and `Perception._detect_location()` checked the quests marker before checking the main keyboard. This could classify the normal main menu as `quests`. Since the strict quests policy allows only `🔙Назад`/`🔙Меню`, the agent then had no selectable action.
 
-The project dependency was updated from an unpinned `telethon` to:
+`bot/agent.py` was hardened so that if a state classified as `quests` actually contains recognizable main-menu buttons, it is treated as the main menu for action selection and prefers `🏜Исследовать`. This is a local compatibility fix that does not alter Q-learning itself.
 
-`telethon>=1.44.0`
-
-This is important because the runtime uses Python 3.14, and current Telethon 1.44.0 explicitly includes Python 3.14 compatibility fixes.
-
-### Current launch boundary
-
-Before the next run, update the local Python environment from `requirements.txt` if that has not already been done. Then verify that `Connected: auth/kerdor` appears before judging the agent/Qwen runtime.
-
-### Latest code changes — 2026-09-05
-
-Commits:
-- `43b98b1` — detect the game's secondary menu as `secondary_menu`;
-- `0d24b95` — make Qwen JSON result parsing tolerant of wrapper text/JSON extraction failures;
-- `d5ff7a4` — harden Agent action filtering for stale/ambiguous submenu buttons;
-- `4f62a64` — fix KnowledgeWriter API call;
-- `5f94d53` — add stagnation penalty to reward learning;
-- `20ea10e` — penalize stagnation and ignore unchanged messages;
-- `a629829` — fix Telethon `MessageButton` keyboard handling;
-- `950ebcc` — fix flat `MessageButton` handling in Perception;
-- `0425b69` — fix secondary-menu navigation priority and flat button clicking;
-- `2c89268` — make navigation states deterministic instead of exploratory.
+Commit:
+- `fe6bd06` — handle misclassified main keyboard as quests.
