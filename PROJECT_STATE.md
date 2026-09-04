@@ -75,7 +75,7 @@ It:
 
 ### Qwen analyst layer
 
-`bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. Qwen analysis is configured for every completed transition by default (`QWEN_ANALYSIS_INTERVAL=1`) whenever Qwen is enabled and an API key is present.
+`bot/qwen_analyst.py` is connected to `Agent.step()` and remains asynchronous. Qwen analysis is configured for every completed transition by default (`QWEN_ANALYSIS_INTERVAL=1`) whenever Qwen is enabled.
 
 The analyst receives:
 - before/after normalized state;
@@ -90,7 +90,27 @@ Qwen returns:
 
 Qwen does not select or execute gameplay actions.
 
-Qwen does not require a separate local process. The existing analyst calls the configured OpenAI-compatible DashScope endpoint directly. If `QWEN_ENABLED=false` or `QWEN_API_KEY` is empty, the agent continues without Qwen analysis.
+### Qwen local Ollama backend — 2026-09-04
+
+The Qwen backend was switched from the remote DashScope OpenAI-compatible API to the user's already-installed local Ollama instance.
+
+Current defaults in `bot/qwen_analyst.py`:
+- `QWEN_ENABLED=false` — enable explicitly in the local environment;
+- `QWEN_BASE_URL=http://localhost:11434`;
+- `QWEN_MODEL=qwen3:4b`;
+- `QWEN_ANALYSIS_INTERVAL=1`;
+- `QWEN_MAX_TOKENS=1200`;
+- `QWEN_TIMEOUT=120` seconds.
+
+The analyst now calls Ollama's native `/api/chat` endpoint and does not require `QWEN_API_KEY`. The request uses non-streaming output and disables Qwen thinking for this fast structured-analysis workload. The existing JSON parsing, knowledge writing, bounded learning signal and asynchronous per-account serialization remain unchanged.
+
+The local model confirmed by the user is `qwen3:4b` (approximately 2.5 GB installed through Ollama).
+
+This keeps the intended pipeline local:
+
+`Perception → Q-learning action → Telegram → next state → local reward/Q update → local Ollama Qwen3 4B analysis → optional Qwen learning signal → second Q update + knowledge storage`
+
+No Qwen credentials are required for the local backend.
 
 ### Qwen → Q-learning feedback
 
@@ -109,10 +129,6 @@ This makes Qwen an evaluator/teacher rather than a policy: Q-learning still choo
 ### Qwen transition delivery
 
 Every eligible transition creates an asynchronous analysis task. Per-account Qwen calls are serialized with an asyncio lock and are no longer silently discarded merely because a previous Qwen request is still running.
-
-This means the intended learning pipeline is now:
-
-`Perception → Q-learning action → Telegram → next state → local reward/Q update → Qwen analysis → optional Qwen learning signal → second Q update + knowledge storage`
 
 ### Repeated-evidence confirmation
 
@@ -141,10 +157,6 @@ When detected:
 
 Different conditions or exceptions are not automatically treated as contradictions. The analyst is instructed to preserve uncertainty when the evidence does not prove incompatibility.
 
-### Qwen integration correction
-
-The Qwen analyst uses the current retrieval API correctly and explicitly requests conflicted knowledge so it can compare new observations against unresolved claims. Normal agent retrieval still excludes those claims.
-
 ### Local preflight
 
 Added `self_check.py` for a safe local verification before Telegram execution. It checks:
@@ -155,16 +167,6 @@ Added `self_check.py` for a safe local verification before Telegram execution. I
 - Qwen JSON parsing.
 
 The preflight does not connect to Telegram and does not call the Qwen API.
-
-### Static launch audit — 2026-09-04
-
-The repository was audited across the current agent, Q-learning, Telegram client, configuration, Qwen analyst, retrieval and knowledge writer integration points.
-
-Critical integration issue found and corrected:
-- `QwenAnalyst` was calling `build_qwen_prompt_context()` with the obsolete `include_learned` argument. The call now matches the current retrieval interface.
-
-Additional consistency correction:
-- conflicted knowledge is now explicitly labelled `LEARNED-CONFLICT` when included for analyst investigation, matching the documented architecture.
 
 ### Runtime observation and performance fix — 2026-09-04
 
@@ -227,33 +229,26 @@ The Qwen analyst was previously configured to analyze only every 10th completed 
 
 ### Qwen learning feedback — 2026-09-04
 
-The first Qwen change only increased analysis frequency. It did not yet make Qwen materially participate in learning. That gap is now corrected.
-
-Implemented:
-- Qwen analyzes every completed transition by default when enabled;
-- Qwen returns a bounded evidence-based `learning_signal` in addition to knowledge candidates;
-- `Agent` logs the local reward and Q value immediately after the normal local update;
-- Qwen analysis runs in the background and, when it returns a non-zero signal, performs an additional Q-learning update for that same transition;
-- Qwen requests are serialized per account rather than silently skipped while another request is running;
-- malformed/failed/disabled Qwen analysis is neutral (`0.0`) and does not interrupt gameplay;
-- runtime logging now exposes `Reward`, `Q`, `Qwen learning signal`, and `Qwen-adjusted reward`.
+The Qwen analyst now returns a bounded `learning_signal` in addition to knowledge candidates, and `Agent` can perform an additional Q-learning update from that signal. Qwen remains an evaluator/teacher and never selects actions.
 
 ### Current launch boundary
 
-The next local run should verify the context-aware action filtering, local reward path and Qwen feedback path.
+The next local run should verify the context-aware action filtering, local reward path and local Ollama Qwen feedback path.
 
 Recommended order:
-1. let `dev_runner.py` pull the latest commits and restart automatically;
-2. run with one enabled account;
-3. verify skills/equipment/exploration/battle screens expose only context-relevant actions;
-4. verify the agent no longer jumps from a submenu into `⭐️Задания`, `🏆Турнир`, `🏪Лавка` or similar global actions merely because those buttons are present;
-5. verify payment/purchase/discard actions are never selected autonomously;
-6. verify battle control screens are recognized or at least filtered to battle actions;
-7. verify every transition prints a non-ambiguous local `Reward` and `Q` line;
-8. enable Qwen and verify `Qwen learning signal` appears for completed transitions;
-9. verify non-zero Qwen signals produce `Qwen-adjusted reward` and move the Q-value;
-10. inspect `data/knowledge/learned/` for durable observations produced by Qwen;
-11. only then enable additional accounts and long autonomous runs.
+1. let `dev_runner.py` pull the latest commit and restart automatically;
+2. ensure Ollama is running and `qwen3:4b` is available;
+3. set `QWEN_ENABLED=true` in the local `.env`;
+4. run with one enabled account;
+5. verify skills/equipment/exploration/battle screens expose only context-relevant actions;
+6. verify the agent no longer jumps from a submenu into `⭐️Задания`, `🏆Турнир`, `🏪Лавка` or similar global actions merely because those buttons are present;
+7. verify payment/purchase/discard actions are never selected autonomously;
+8. verify battle control screens are recognized or at least filtered to battle actions;
+9. verify every transition prints a non-ambiguous local `Reward` and `Q` line;
+10. verify `Qwen learning signal` appears for completed transitions;
+11. verify non-zero Qwen signals produce `Qwen-adjusted reward` and move the Q-value;
+12. inspect `data/knowledge/learned/` for durable observations produced by Qwen;
+13. only then enable additional accounts and long autonomous runs.
 
 ### Current learning boundary
 
