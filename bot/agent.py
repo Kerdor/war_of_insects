@@ -123,47 +123,17 @@ class Agent:
 
         return selected.text
 
-    async def _process_qwen_learning(
-        self,
-        account_id,
-        state,
-        selected_key,
-        next_state,
-        reward,
-        recent_actions,
-        state_key,
-        next_key,
-        next_actions,
-    ):
-        result = await self.analyst.analyze_transition(
-            account_id,
-            state,
-            selected_key,
-            next_state,
-            reward,
-            recent_actions,
-        )
+    async def _process_qwen_learning(self, account_id, state, selected_key, next_state, reward, recent_actions, state_key, next_key, next_actions):
+        result = await self.analyst.analyze_transition(account_id, state, selected_key, next_state, reward, recent_actions)
         learning_signal = result.get("learning_signal", 0.0)
         if learning_signal == 0.0:
             return
         adjusted_reward = reward + learning_signal
-        self.learning.update(
-            state_key,
-            selected_key,
-            adjusted_reward,
-            next_key,
-            next_actions,
-        )
+        self.learning.update(state_key, selected_key, adjusted_reward, next_key, next_actions)
         print(f"[{account_id}] Qwen-adjusted reward: {adjusted_reward:+.2f} | Q: {self.learning.get(state_key, selected_key):+.3f}")
 
     def _selectable_actions(self, state):
-        dangerous_markers = (
-            "перейти к оплате",
-            "купить кредит",
-            "купить",
-            "выкинуть",
-            "удалить",
-        )
+        dangerous_markers = ("перейти к оплате", "купить кредит", "купить", "выкинуть", "удалить")
         safe = []
         for action in state.available_actions:
             text = action.text.strip().lower()
@@ -175,73 +145,22 @@ class Agent:
             next_actions = [action for action in safe if action.text.strip().lower() == "🔘далее"]
             if next_actions:
                 return next_actions
+            return [action for action in safe if action.text.strip().lower() in {"🔙назад", "🔙меню"}]
 
         if state.location == "secondary_menu":
-            navigation = [
-                action for action in safe
-                if action.text.strip().lower() == "🔙меню"
-            ]
-            if navigation:
-                return navigation
+            return [action for action in safe if action.text.strip().lower() == "🔙меню"]
 
         if state.location == "help":
-            navigation = [
-                action for action in safe
-                if action.text.strip().lower() == "🔙назад"
-            ]
-            if navigation:
-                return navigation
-
-        action_texts = {action.text.strip().lower() for action in safe}
-
-        if "🔘далее" in action_texts:
-            return [action for action in safe if action.text.strip().lower() == "🔘далее"]
+            return [action for action in safe if action.text.strip().lower() == "🔙назад"]
 
         if state.location == "quests":
-            navigation = [
-                action for action in safe
-                if action.text.strip().lower() in {"🔙назад", "🔙меню"}
-            ]
-            if navigation:
-                return navigation
+            return [action for action in safe if action.text.strip().lower() in {"🔙назад", "🔙меню"}]
 
-        battle_actions = {
-            "атаковать",
-            "общение",
-            "снаряжение",
-            "отступить",
-            "состояние (вы)",
-            "предметы",
-            "состояние (враг)",
-        }
-        skill_actions = {
-            "🦾сила",
-            "🪶ловкость",
-            "🦿атлетика",
-            "🏹восприятие",
-            "⚔атака",
-            "🛡защита",
-            "💨уклонение",
-            "🗡режущее",
-            "🪓рубящее",
-            "🔨дробящее",
-            "🦯колющее",
-        }
-        equipment_actions = {
-            "💀голова",
-            "🪲грудь",
-            "🪱живот",
-            "🐾лапы",
-            "📥снять всё",
-            "📌шаблоны",
-        }
-        exploration_actions = {
-            "🏜ближайшие территории",
-            "⛰умеренная дальность",
-            "🌋дальние территории",
-            "🔙назад",
-            "🔘сбор отряда",
-        }
+        action_texts = {action.text.strip().lower() for action in safe}
+        battle_actions = {"атаковать", "общение", "снаряжение", "отступить", "состояние (вы)", "предметы", "состояние (враг)"}
+        skill_actions = {"🦾сила", "🪶ловкость", "🦿атлетика", "🏹восприятие", "⚔атака", "🛡защита", "💨уклонение", "🗡режущее", "🪓рубящее", "🔨дробящее", "🦯колющее"}
+        equipment_actions = {"💀голова", "🪲грудь", "🪱живот", "🐾лапы", "📥снять всё", "📌шаблоны"}
+        exploration_actions = {"🏜ближайшие территории", "⛰умеренная дальность", "🌋дальние территории", "🔙назад", "🔘сбор отряда"}
 
         battle_count = len(action_texts & battle_actions)
         skill_count = len(action_texts & skill_actions)
@@ -264,39 +183,27 @@ class Agent:
             return [action for action in safe if action.text.strip().lower() == "🔙назад"]
 
         if state.location == "exploration":
-            filtered = [
-                action for action in safe
-                if action.text.strip().lower() in exploration_actions
-            ]
+            filtered = [action for action in safe if action.text.strip().lower() in exploration_actions]
             if filtered:
                 return filtered
 
         if state.location == "battle" or (battle_count >= 5 and skill_count == 0 and equipment_count == 0):
-            filtered = [
-                action for action in safe
-                if action.text.strip().lower() in battle_actions
-            ]
+            filtered = [action for action in safe if action.text.strip().lower() in battle_actions]
             if filtered:
                 return filtered
 
         if state.location == "main":
-            explore = [
-                action for action in safe
-                if action.text.strip().lower() == "🏜исследовать"
-            ]
+            explore = [action for action in safe if action.text.strip().lower() == "🏜исследовать"]
             if explore:
                 return explore
 
         navigation_actions = {"назад", "🔙назад", "🔙меню"}
         if len(safe) == 1 and safe[0].text.strip().lower() in navigation_actions:
             return safe
-
         if state.location == "unknown" and "🔙назад" in action_texts and len(action_texts) <= 3:
             return [action for action in safe if action.text.strip().lower() in navigation_actions]
-
         if "назад" in action_texts and len(action_texts) <= 3:
             return [action for action in safe if action.text.strip().lower() in navigation_actions]
-
         return safe
 
     async def _wait_for_change(self, client, state_key: str):
@@ -321,7 +228,6 @@ class Agent:
                 if action.callback_data is not None and data == action.callback_data:
                     await button.click()
                     return True
-
         for row in message.buttons or []:
             buttons = row if isinstance(row, (list, tuple)) else [row]
             for button in buttons:
@@ -330,7 +236,6 @@ class Agent:
                 if getattr(button, "text", "") == action.text:
                     await client.send(action.text)
                     return True
-
         try:
             await client.send(action.text)
             return True
@@ -339,13 +244,7 @@ class Agent:
 
     def _is_terminal(self, state) -> bool:
         text = state.raw_text.lower()
-        return (
-            "погиб" in text
-            or "проиграл" in text
-            or "все враги повержены" in text
-            or "побежден" in text
-            or "победил" in text
-        )
+        return "погиб" in text or "проиграл" in text or "все враги повержены" in text or "побежден" in text or "победил" in text
 
     def _outcome(self, state) -> str:
         text = state.raw_text.lower()
