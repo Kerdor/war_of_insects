@@ -25,7 +25,7 @@ class QwenAnalyst:
             "https://dashscope.aliyuncs.com/compatible-mode/v1",
         ).rstrip("/")
         self.model = os.getenv("QWEN_MODEL", "qwen-plus").strip()
-        self.interval = max(1, int(os.getenv("QWEN_ANALYSIS_INTERVAL", "10")))
+        self.interval = max(1, int(os.getenv("QWEN_ANALYSIS_INTERVAL", "1")))
         self.max_tokens = max(256, int(os.getenv("QWEN_MAX_TOKENS", "1200")))
         self.timeout = max(5, int(os.getenv("QWEN_TIMEOUT", "30")))
         self.retriever = retriever or KnowledgeRetriever()
