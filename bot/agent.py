@@ -83,7 +83,12 @@ class Agent:
         next_state = self.perception.parse(next_message.text or "", next_buttons)
         next_key = self.perception.state_key(next_state)
         next_actions = [action.key or action.text for action in self._selectable_actions(next_state)]
-        reward = self.reward.calculate(state, next_state, selected.text)
+        stagnation_steps = 0
+        for recent_state in reversed(context["recent_states"]):
+            if recent_state != state_key:
+                break
+            stagnation_steps += 1
+        reward = self.reward.calculate(state, next_state, selected.text, stagnation_steps)
 
         self.memory.add(account_id, state_key, selected_key, next_key, reward)
         self.transitions.record(state_key, selected_key, next_key, reward)
@@ -304,7 +309,7 @@ class Agent:
             state = self.perception.parse(message.text or "", buttons)
             if self.perception.state_key(state) != state_key:
                 return message
-        return await client.get_latest()
+        return None
 
     async def _click(self, client, message, action) -> bool:
         if action.callback_data is not None:
