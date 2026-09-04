@@ -87,6 +87,7 @@ class KnowledgeWriter:
                 "confidence": 0.0,
                 "status": "hypothesis",
                 "conflicts": [],
+                "conflicting_claims": [],
             },
         )
 
@@ -148,10 +149,44 @@ class KnowledgeWriter:
                 record["conflicts"].append(target_digest)
             if record.get("claim") not in target_record.setdefault("conflicting_claims", []):
                 target_record["conflicting_claims"].append(record["claim"])
-            if digest := self._digest_for_record(record):
-                if digest not in target_record.setdefault("conflicts", []):
-                    target_record["conflicts"].append(digest)
+            record_digest = self._digest_for_record(record)
+            if record_digest not in target_record.setdefault("conflicts", []):
+                target_record["conflicts"].append(record_digest)
             target_record["status"] = "conflicted"
+            self._write_record_file(target_record, "conflict-detected")
+
+    def _write_record_file(self, record: dict[str, Any], account_id: str) -> Path:
+        domain = self._slug(record.get("domain", "general")) or "general"
+        kind = self._slug(record.get("type", "observation")) or "observation"
+        digest = self._digest_for_record(record)
+        directory = self.root / domain
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{kind}-{digest}.md"
+        candidate = {
+            "domain": domain,
+            "type": kind,
+            "conditions": record.get("conditions", ""),
+            "consequences": record.get("consequences", ""),
+            "exceptions": record.get("exceptions", ""),
+            "related": record.get("related", []),
+        }
+        path.write_text(
+            self._render(
+                candidate=candidate,
+                claim=str(record.get("claim", "")),
+                confidence=float(record.get("confidence", 0.0)),
+                status=str(record.get("status", "hypothesis")),
+                account_id=account_id,
+                evidence_lines=self._evidence_lines(record),
+                conditions=str(record.get("conditions", "")).strip(),
+                consequences=str(record.get("consequences", "")).strip(),
+                exceptions=str(record.get("exceptions", "")).strip(),
+                digest=digest,
+                record=record,
+            ),
+            encoding="utf-8",
+        )
+        return path
 
     def _digest_for_record(self, record: dict[str, Any]) -> str:
         claim = str(record.get("claim", "")).strip()
