@@ -82,6 +82,20 @@ Runtime logs also showed that Telethon can expose stale battle reply-keyboard bu
 
 The change is limited to action filtering; Q-learning remains the action-selection layer and Qwen remains an evaluator.
 
+### Stagnation reward and stale-message handling — 2026-09-05
+
+Runtime behavior showed that the agent could get trapped on a submenu/secondary-menu state. Two changes were made:
+
+- `bot/reward.py` now accepts an optional `stagnation_steps` value. When the agent remains in the same location across repeated transitions, the reward is reduced by `0.10` per repeated step, capped at `-0.50`. This makes useless state loops increasingly unattractive to Q-learning without changing the positive rewards for experience, levels, victories or loot.
+- `bot/agent.py` now passes the repeated-state count into the reward calculation.
+- `bot/agent.py` no longer treats an unchanged/stale Telegram message as a completed transition after the 5-second polling window. `_wait_for_change()` returns `None` instead, so the agent does not learn a fake zero-reward transition from an old message.
+
+The existing `secondary_menu` action filter still restricts that state to `🔙Меню`. The goal is for Q-learning to learn that staying in a navigation-only state is bad and returning to the main menu is the useful transition.
+
+Commits:
+- `5f94d53` — add stagnation penalty to reward learning;
+- `20ea10e` — penalize stagnation and ignore unchanged messages.
+
 ### Runtime connection issue — 2026-09-04
 
 A local run with `C:\Python314\python.exe` did not reach the `Connected: auth/kerdor` log line. Telethon repeatedly reported:
@@ -107,4 +121,6 @@ Commits:
 - `0d24b95` — make Qwen JSON result parsing tolerant of wrapper text/JSON extraction failures;
 - `d5ff7a4` — harden Agent action filtering for stale/ambiguous submenu buttons;
 - `4f62a64` — fix KnowledgeWriter API call;
-- this `PROJECT_STATE.md` update records the Qwen knowledge persistence fix.
+- `5f94d53` — add stagnation penalty to reward learning;
+- `20ea10e` — penalize stagnation and ignore unchanged messages;
+- this `PROJECT_STATE.md` update records the latest navigation-learning fix.
