@@ -1,6 +1,6 @@
 # PROJECT STATE
 
-## 2026-09-04 — Runtime error fixes and reply-keyboard execution
+## 2026-09-04 — Runtime error fixes, reply-keyboard execution and dev runner
 
 Fixed runtime errors and the first no-action issue found during multi-account startup/game loop testing.
 
@@ -19,6 +19,17 @@ Fixed runtime errors and the first no-action issue found during multi-account st
 - reply-keyboard game actions are now sent as normal messages through the account client;
 - added concise runtime logging for detected state, available actions, selected action, and failed clicks.
 
+### Development runner
+
+Added `dev_runner.py`:
+- starts `main.py`;
+- runs `git pull` every 5 seconds;
+- compares the current HEAD before and after pull;
+- restarts `main.py` only when a new commit is detected;
+- leaves the running process untouched when pull fails;
+- supports Ctrl+C shutdown;
+- does not modify `.env` or Telegram session files.
+
 ### Multi-account behavior
 
 - Enabled accounts still authorize sequentially.
@@ -35,3 +46,4 @@ Fixed runtime errors and the first no-action issue found during multi-account st
 - Agent SwitchInline handling: `9fdc33b8d1c5223a736ac703c7231597366c41f5`
 - Perception SwitchInline filtering: `f52e13d661f5d4840efeafd4b6f4f170a128cc7f`
 - Reply-keyboard action execution: `62c0376f91961d48c4f83745fd8a46c8ce4da2a0`
+- Development runner: `f33f253612867a4d20bb25de892317b6af475ad3`
