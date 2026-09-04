@@ -23,9 +23,9 @@ class RewardEngine:
             reward += 12.0
         if "побежден" in after_text or "победил" in after_text:
             reward += 25.0
-        if "погиб" in after_text or "проиграл" in after_text:
+        if "все враги повержены" not in after_text and ("погиб" in after_text or "проиграл" in after_text):
             reward -= 100.0
-        if "нашел" in after_text or "найден" in after_text:
+        if ("нашел" in after_text or "найдены предметы" in after_text or "найден предмет" in after_text) and "не было найдено" not in after_text:
             reward += 5.0
 
         if after.events and after.events != before.events:
