@@ -71,7 +71,7 @@ class QwenAnalyst:
         prompt = self._build_prompt(payload)
         try:
             raw = self._request(prompt)
-            result = json.loads(raw)
+            result = self._parse_result(raw)
             self._persist_candidates(account_id, state_before, action, state_after, reward, result)
             signal = result.get("learning_signal", 0.0)
             try:
@@ -82,6 +82,21 @@ class QwenAnalyst:
         except Exception as exc:
             print(f"[QWEN] Analysis failed for {account_id}: {exc}")
             return {"learning_signal": 0.0, "candidates": []}
+
+    @staticmethod
+    def _parse_result(raw: str) -> dict[str, Any]:
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError:
+            start = raw.find("{")
+            end = raw.rfind("}")
+            if start < 0 or end <= start:
+                raise
+            result = json.loads(raw[start:end + 1])
+
+        if not isinstance(result, dict):
+            raise ValueError("Qwen response is not a JSON object")
+        return result
 
     def _request(self, prompt: str) -> str:
         payload = {
