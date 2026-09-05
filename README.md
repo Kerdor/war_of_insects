@@ -1,48 +1,17 @@
 # War of Insects Self-Learning Agent
 
-Telegram self-bot for War of Insects with an incremental learning architecture.
+Проект перезапущен с нуля.
 
-## Structure
+Цель — постепенно построить агента, который учится играть в War of Insects на реальном опыте, не пытаясь заранее запрограммировать всю стратегию игры.
 
-- `bot/` — agent, perception, learning, memory, reward, strategy and Telegram client modules.
-- `config.py` — environment and account configuration.
-- `main.py` — normal application entry point.
-- `dev_runner.py` — development runner with automatic `git pull` and restart on updates.
-- `self_check.py` — local preflight check for core imports, retrieval, contradiction handling and Qwen JSON parsing.
-- `data/` — persistent learning data created at runtime.
+На первом этапе оставлены только базовые компоненты подключения к Telegram и конфигурации аккаунтов. Старая система Q-learning, памяти, наград, Qwen-анализа и жёстко заданной логики состояний удалена.
 
-## Configuration
-
-Copy `.env.example` to `.env` and fill in the Telegram credentials and the accounts you want to run.
-
-Use `ACCOUNT_N_ENABLED=true/false` to enable or disable an account without removing its phone/session settings.
-
-Qwen analysis is optional. Set `QWEN_ENABLED=true` and provide `QWEN_API_KEY` to enable the asynchronous analyst. Q-learning and the Telegram agent do not require Qwen to run.
-
-## Run
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Before connecting to Telegram, run the local preflight:
-
-```bash
-python self_check.py
-```
-
-The preflight does not send Telegram messages and does not call the Qwen API.
-
-For normal execution:
+## Запуск
 
 ```bash
 python main.py
 ```
 
-For development with automatic Git updates every 5 seconds:
+## Текущий этап
 
-```bash
-python dev_runner.py
-```
+Агент пока является минимальной оболочкой: подключается к аккаунтам и наблюдает сообщения игры. Следующие компоненты будем добавлять по одному, проверяя каждый на реальной игре.
